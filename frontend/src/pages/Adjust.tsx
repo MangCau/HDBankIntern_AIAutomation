@@ -104,36 +104,44 @@ interface NewsItem {
   sourceUrl: string
 }
 
-function HomePage() {
+function Adjust() {
+    const today = new Date().toISOString().split('T')[0]
   const [selectedCategory, setSelectedCategory] = useState<Category>('products')
+    const [startDate, setStartDate] = useState(today)
+    const [endDate, setEndDate] = useState(today)
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [tempSelectedIds, setTempSelectedIds] = useState<Set<string>>(new Set())
+  const [confirmedSelectedIds, setConfirmedSelectedIds] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editedSummaries, setEditedSummaries] = useState<Record<string, string>>({})
+  const [tempEditValue, setTempEditValue] = useState('')
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set())
 
   const getCategoryData = (): NewsItem[] => {
     return MOCK_DATA[selectedCategory]
   }
 
-  const toggleExpanded = (id: number) => {
-    const newSet = new Set(expandedItems)
-    if (newSet.has(id)) {
-      newSet.delete(id)
-    } else {
-      newSet.add(id)
-    }
-    setExpandedItems(newSet)
-  }
-
+  // Filter data theo date range and search query
   const getFilteredData = (): NewsItem[] => {
     const data = getCategoryData()
-    if (!searchQuery.trim()) {
-      return data
+    let filtered = data.filter(item => {
+      const itemDate = new Date(item.publishDate)
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      return itemDate >= start && itemDate <= end
+    })
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(item =>
+        item.title.toLowerCase().includes(query) ||
+        item.summary.toLowerCase().includes(query) ||
+        item.bank.toLowerCase().includes(query)
+      )
     }
-    const query = searchQuery.toLowerCase()
-    return data.filter(item =>
-      item.title.toLowerCase().includes(query) ||
-      item.summary.toLowerCase().includes(query) ||
-      item.bank.toLowerCase().includes(query)
-    )
+
+    return filtered
   }
 
   const getCategoryTitle = (): string => {
@@ -154,31 +162,124 @@ function HomePage() {
     })
   }
 
+  // Tạo unique key cho mỗi tin tức
+  const getUniqueKey = (category: Category, id: number): string => {
+    return `${category}-${id}`
+  }
+
+  // Xử lý chọn tin tức
+  const handleToggleSelectionMode = () => {
+    if (isSelectionMode) {
+      // Nếu đang tắt chế độ chọn, reset tempSelectedIds về confirmedSelectedIds
+      setTempSelectedIds(new Set(confirmedSelectedIds))
+    }
+    setIsSelectionMode(!isSelectionMode)
+  }
+
+  const handleCheckboxChange = (id: number) => {
+    const uniqueKey = getUniqueKey(selectedCategory, id)
+    const newSet = new Set(tempSelectedIds)
+    if (newSet.has(uniqueKey)) {
+      newSet.delete(uniqueKey)
+    } else {
+      newSet.add(uniqueKey)
+    }
+    setTempSelectedIds(newSet)
+  }
+
+  const handleUpdateSelection = () => {
+    const message = 'Bạn có chắc chắn muốn cập nhật lựa chọn tin tức này không?'
+    if (window.confirm(message)) {
+      setConfirmedSelectedIds(new Set(tempSelectedIds))
+      setIsSelectionMode(false)
+      alert('Đã cập nhật lựa chọn tin tức thành công!')
+    }
+  }
+
+  // Tính số lượng tin được chọn cho mỗi danh mục
+  const getSelectedCount = (category: Category): number => {
+    const categoryData = MOCK_DATA[category]
+    return categoryData.filter(item => confirmedSelectedIds.has(getUniqueKey(category, item.id))).length
+  }
+
+  // Xử lý chỉnh sửa summary
+  const handleEditSummary = (id: number, currentSummary: string) => {
+    const uniqueKey = getUniqueKey(selectedCategory, id)
+    setEditingId(uniqueKey)
+    setTempEditValue(editedSummaries[uniqueKey] || currentSummary)
+  }
+
+  const handleSaveSummary = (id: number) => {
+    const uniqueKey = getUniqueKey(selectedCategory, id)
+    const message = 'Bạn có chắc chắn muốn lưu thay đổi nội dung này không?'
+    if (window.confirm(message)) {
+      setEditedSummaries({
+        ...editedSummaries,
+        [uniqueKey]: tempEditValue
+      })
+      setEditingId(null)
+      setTempEditValue('')
+      alert('Đã lưu thay đổi thành công!')
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setTempEditValue('')
+  }
+
+  const getSummary = (item: NewsItem): string => {
+    const uniqueKey = getUniqueKey(selectedCategory, item.id)
+    return editedSummaries[uniqueKey] || item.summary
+  }
+
+    const toggleExpanded = (id: number) => {
+    const newSet = new Set(expandedItems)
+    if (newSet.has(id)) {
+      newSet.delete(id)
+    } else {
+      newSet.add(id)
+    }
+    setExpandedItems(newSet)
+  }
+
   return (
     <div className="page-container">
       {/* Sidebar Menu */}
       <aside className="sidebar">
         <div className='logo-img'></div>
 
-        {/* Nút xuất báo cáo */}
-        <button className="export-button">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Xuất báo cáo
-        </button>
-
         {/* Thời gian */}
-        <div className="sidebar-section">
-          <h3 className="section-title">THỜI GIAN</h3>
-          <div className="section-content">
-            <p className="date-range">
-              Báo cáo được tổng hợp từ ngày <strong>01/01/2025</strong> đến ngày <strong>19/01/2025</strong>
-            </p>
-          </div>
-        </div>
+                <div className='sidebar-section'>
+                    <h3 className='section-title'>THỜI GIAN</h3>
+                    <div className='section-content'>
+                        <p className='date-range'>
+                            Tin tức được cập nhật từ ngày <strong>{formatDate(startDate)}</strong> đến ngày <strong>{formatDate(endDate)}</strong>
+                        </p>
+                        <div className='date-selectors'>
+                            <div className='date-input-wrapper'>
+                                <label htmlFor='start-date'>Từ ngày:</label>
+                                <input
+                                    type='date'
+                                    id='start-date'
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className='date-input'
+                                />
+                            </div>
+                            <div className='date-input-wrapper'>
+                                <label htmlFor='end-date'>Đến ngày:</label>
+                                <input
+                                    type='date'
+                                    id='end-date'
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className='date-input'
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
         {/* Thống kê nhanh */}
         <div className="sidebar-section">
@@ -199,6 +300,21 @@ function HomePage() {
             <div className="stat-item">
               <span className="stat-label">Các văn bản pháp luật</span>
               <span className="stat-value">0</span>
+            </div>
+          </div>
+
+          <div className="section-content">
+            <div className="stat-item">
+              <span className="stat-label">Sản phẩm & công nghệ mới - được chọn</span>
+              <span className="stat-value">{getSelectedCount('products')}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Tin tức ngành Ngân hàng - được chọn</span>
+              <span className="stat-value">{getSelectedCount('bankingNews')}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">Tin tức ngành Fintech - được chọn</span>
+              <span className="stat-value">{getSelectedCount('fintechNews')}</span>
             </div>
           </div>
         </div>
@@ -223,10 +339,28 @@ function HomePage() {
       {/* Main Content */}
       <main className="main-content">
         <div className="content-header">
-          <h1>{getCategoryTitle()}</h1>
-          <p className="content-subtitle">
-            Tổng cộng: <strong>{getFilteredData().length}</strong> mục
-          </p>
+          <div>
+            <h1>{getCategoryTitle()}</h1>
+            <p className="content-subtitle">
+              Tổng cộng: <strong>{getFilteredData().length}</strong> mục
+            </p>
+          </div>
+          <div className="header-actions">
+            <button
+              className={`selection-mode-btn ${isSelectionMode ? 'active' : ''}`}
+              onClick={handleToggleSelectionMode}
+            >
+              {isSelectionMode ? 'Hủy chọn' : 'Chọn tin tức'}
+            </button>
+            {isSelectionMode && (
+              <button
+                className="update-selection-btn"
+                onClick={handleUpdateSelection}
+              >
+                Cập nhật
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -255,14 +389,67 @@ function HomePage() {
         </div>
 
         <div className="news-list">
-          {getFilteredData().map((item) => (
-            <article key={item.id} className="news-card">
+          {getFilteredData().map((item) => {
+            const uniqueKey = getUniqueKey(selectedCategory, item.id)
+            return (
+            <article key={item.id} className={`news-card ${confirmedSelectedIds.has(uniqueKey) ? 'selected' : ''}`}>
+              {isSelectionMode && (
+                <div className="news-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={tempSelectedIds.has(uniqueKey)}
+                    onChange={() => handleCheckboxChange(item.id)}
+                  />
+                </div>
+              )}
+              {!isSelectionMode && confirmedSelectedIds.has(uniqueKey) && (
+                <div className="news-selected-badge">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#28a745" strokeWidth="3">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+              )}
               <div className="news-image">
                 <img src={item.image} alt={item.title} />
               </div>
               <div className="news-content">
                 <h2 className="news-title">{item.title}</h2>
-                <p className="news-summary">{item.summary}</p>
+                {editingId === uniqueKey ? (
+                  <div className="edit-summary-container">
+                    <textarea
+                      className="edit-summary-textarea"
+                      value={tempEditValue}
+                      onChange={(e) => setTempEditValue(e.target.value)}
+                      rows={4}
+                    />
+                    <div className="edit-summary-buttons">
+                      <button className="save-summary-btn" onClick={() => handleSaveSummary(item.id)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        Lưu
+                      </button>
+                      <button className="cancel-summary-btn" onClick={handleCancelEdit}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                        Hủy
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="summary-with-edit">
+                    <p className="news-summary">{getSummary(item)}</p>
+                    <button className="edit-summary-btn" onClick={() => handleEditSummary(item.id, item.summary)}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                      Chỉnh sửa
+                    </button>
+                  </div>
+                )}
 
                 {/* edit this to match the structure detail */}
                 {expandedItems.has(item.id) && (
@@ -275,7 +462,7 @@ function HomePage() {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="news-meta">
                   <div className="meta-item">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -322,11 +509,12 @@ function HomePage() {
                 </div>
               </div>
             </article>
-          ))}
+            )
+          })}
 
           {getFilteredData().length === 0 && (
             <div className='no-results'>
-              <p>Không tìm thấy tin tức nào phù hợp với từ khóa tìm kiếm</p>
+              <p>Không tìm thấy tin tức nào trong khoảng thời gian này</p>
             </div>
           )}
         </div>
@@ -335,4 +523,4 @@ function HomePage() {
   )
 }
 
-export default HomePage
+export default Adjust

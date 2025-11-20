@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, Outlet } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import '../App.css'
 
 function Layout() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const location = useLocation()
 
   const notificationRef = useRef<HTMLDivElement>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
@@ -33,10 +34,10 @@ function Layout() {
         {/* Left side - Navigation links */}
         <div className="navbar-left">
           <div className='logo-img'></div>
-          <Link to="/" className="nav-link">Trang chủ</Link>
-          <Link to="/upload" className="nav-link">Tải lên file</Link>
-          <Link to="/manage" className="nav-link">Quản lý</Link>
-          <Link to="/settings" className="nav-link">Điều chỉnh</Link>
+          <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>Trang chủ</Link>
+          <Link to="/upload" className={`nav-link ${location.pathname === '/upload' ? 'active' : ''}`}>Tải lên file</Link>
+          <Link to="/manage" className={`nav-link ${location.pathname === '/manage' ? 'active' : ''}`}>Quản lý</Link>
+          <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Điều chỉnh</Link>
         </div>
 
         {/* Right side - Icons */}
