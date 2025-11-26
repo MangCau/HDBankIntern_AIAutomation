@@ -2,13 +2,12 @@
 Mặc định mở trang là hiển thị ngày nào?
 2. Homepage:
 (Advanced) Button Xuất báo cáo: Generate tự động slide (AI) - cho chọn giữa các mẫu slide
-(??) Nếu thực hiện cả 2 bản (tác động người dùng) 
-=> Nên cho ra 2 bản tóm tắt ?
-3. Manage Page:
-Có cần khâu tác động người dùng, chọn những thông tin để tổng hợp trên những cái đó
- => nếu có thì thêm nút chọn và gửi lên cho server để tổng hợp
 (Advanced) 4. Upload File:
 Mở rộng nguồn thông tin từ bên ngoài (????)
 4. Account Page
 Hiện thực đơn giản các thông tin tài khoản
 (***) Xem được lịch sử các bản báo cáo đã được xuất
+----select new
+xếp category theo mức độ ưu tiên
+---------
+Trang HomePage và khâu cuối cùng hiển thị (Trang SelectNews)

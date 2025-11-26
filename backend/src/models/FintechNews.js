@@ -2,19 +2,21 @@ const mongoose = require('mongoose');
 
 const fintechNewsSchema = new mongoose.Schema({
   fintech_topic: String,
+  area_affected: mongoose.Schema.Types.Mixed, // Support both String and Array
   title: {
     type: String,
     required: true
   },
+
   summary: String,
   organization: String,
-  impact_area: String,
+  // impact_area: String,
   source_type: String,
   source_url: String,
-  published_date: Date,
-  extracted_from_pdf: Boolean,
+  published_date: mongoose.Schema.Types.Mixed, // Support both String and Date
+  // extracted_from_pdf: Boolean,
   pdf_file_name: String,
-  timestamp: Date
+  // timestamp: Date
 }, {
   collection: 'fintech_news',
   timestamps: false

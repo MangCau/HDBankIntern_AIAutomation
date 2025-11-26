@@ -7,8 +7,11 @@ const connectDB = require('./config/database');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB (optional - don't crash if fails)
+connectDB().catch(err => {
+  logger.warn('MongoDB connection failed, continuing without database');
+  console.warn('⚠️  MongoDB connection failed, continuing without database');
+});
 
 // Middleware
 app.use(cors());

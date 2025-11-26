@@ -36,8 +36,9 @@ function Layout() {
           <div className='logo-img'></div>
           <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>Trang chủ</Link>
           <Link to="/upload" className={`nav-link ${location.pathname === '/upload' ? 'active' : ''}`}>Tải lên file</Link>
-          <Link to="/manage" className={`nav-link ${location.pathname === '/manage' ? 'active' : ''}`}>Quản lý</Link>
-          <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Điều chỉnh</Link>
+          <Link to="/select-news" className={`nav-link ${location.pathname === '/select-news' ? 'active' : ''}`}>Tin tức</Link>
+          <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Quản lý</Link>
+          <Link to="/analytics" className={`nav-link ${location.pathname === '/analytics' ? 'active' : ''}`}>Phân tích</Link>
         </div>
 
         {/* Right side - Icons */}

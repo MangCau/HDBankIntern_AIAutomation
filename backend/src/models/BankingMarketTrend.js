@@ -7,14 +7,14 @@ const bankingMarketTrendSchema = new mongoose.Schema({
     required: true
   },
   summary: String,
-  bank_related: [String],
-  impact_level: String,
+  bank_related: mongoose.Schema.Types.Mixed, // Support both String and Array
+  // impact_level: String,
   source_type: String,
   source_url: String,
-  published_date: Date,
-  extracted_from_pdf: Boolean,
+  published_date: mongoose.Schema.Types.Mixed, // Support both String and Date
+  // extracted_from_pdf: Boolean,
   pdf_file_name: String,
-  timestamp: Date
+  // timestamp: Date
 }, {
   collection: 'banking_market_trends',
   timestamps: false

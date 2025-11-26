@@ -2,8 +2,10 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
 import UploadFile from './pages/UploadFile'
-import Manage from './pages/Manage'
+import ViewNews from './pages/ViewNews'
+import SelectNews from './pages/SelectNews'
 import Adjust from './pages/Adjust'
+import Analytics from './pages/Analytics'
 import './App.css'
 
 function App() {
@@ -13,8 +15,10 @@ function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="upload" element={<UploadFile />} />
-          <Route path="manage" element={<Manage/>} />
+          <Route path="select-news" element={<SelectNews/>} />
+          <Route path="view-news" element={<ViewNews/>} />
           <Route path="settings" element={<Adjust/>} />
+          <Route path="analytics" element={<Analytics/>} />
         </Route>
       </Routes>
     </Router>
