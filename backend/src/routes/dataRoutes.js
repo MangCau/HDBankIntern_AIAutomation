@@ -220,7 +220,8 @@ Yếu tố thể hiện: nội dung dành cho lĩnh vực ${category}
 Nội dung chữ: chỉ cần tiêu đề ngắn gọn`;
 
     // Call Gemini 2.5 Flash Image for image generation
-    const apiKey = 'AIzaSyAfq-PTjr__ZiThTHLGRkLl_H6249xRso4';
+    require('dotenv').config();
+    const apiKey = process.env.GEMINI_API_KEY;
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
 
     const response = await axios.post(geminiUrl, {
