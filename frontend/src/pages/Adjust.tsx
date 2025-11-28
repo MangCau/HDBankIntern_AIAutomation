@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import '../App.css'
+import { apiEndpoint } from '../config/api'
 
-// API URL
-const API_URL = 'http://localhost:5000/api/data'
+// API URL - now uses environment variable for production
+const API_URL = apiEndpoint('api/data')
 
 // Dữ liệu giả cho demo (fallback)
 const MOCK_DATA = {

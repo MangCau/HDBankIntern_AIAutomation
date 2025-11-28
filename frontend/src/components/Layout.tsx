@@ -1,14 +1,67 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useJob } from '../contexts/JobContext'
 import '../App.css'
 
 function Layout() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+
+  // Load appMode from localStorage, default to 'report' if not found
+  const [appMode, setAppMode] = useState<'report' | 'edit'>(() => {
+    const savedMode = localStorage.getItem('appMode')
+    return (savedMode === 'edit' || savedMode === 'report') ? savedMode : 'report'
+  })
+
+  const [elapsedTime, setElapsedTime] = useState(0)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { currentJob, isProcessing } = useJob()
 
   const notificationRef = useRef<HTMLDivElement>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
+
+  // Update elapsed time for processing job
+  useEffect(() => {
+    if (!isProcessing || !currentJob) {
+      setElapsedTime(0)
+      return
+    }
+
+    const startTime = currentJob.createdAt.getTime()
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000)
+      setElapsedTime(elapsed)
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [isProcessing, currentJob])
+
+  // Format elapsed time as MM:SS
+  const formatElapsedTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${String(secs).padStart(2, '0')}`
+  }
+
+  // Save appMode to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('appMode', appMode)
+  }, [appMode])
+
+  // Toggle between report and edit mode
+  const toggleMode = () => {
+    const newMode = appMode === 'report' ? 'edit' : 'report'
+    setAppMode(newMode)
+    setShowUserMenu(false)
+
+    // Auto-navigate to appropriate page based on mode
+    if (newMode === 'report') {
+      navigate('/') // Navigate to Home/Report page
+    } else {
+      navigate('/select-news') // Navigate to News page (default for edit mode)
+    }
+  }
 
   // Click outside to close dropdowns
   useEffect(() => {
@@ -34,12 +87,31 @@ function Layout() {
         {/* Left side - Navigation links */}
         <div className="navbar-left">
           <div className='logo-img'></div>
-          <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>Trang chủ</Link>
-          <Link to="/upload" className={`nav-link ${location.pathname === '/upload' ? 'active' : ''}`}>Tải lên file</Link>
-          <Link to="/select-news" className={`nav-link ${location.pathname === '/select-news' ? 'active' : ''}`}>Tin tức</Link>
-          <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Quản lý</Link>
-          <Link to="/analytics" className={`nav-link ${location.pathname === '/analytics' ? 'active' : ''}`}>Phân tích</Link>
+          {appMode === 'report' ? (
+            // Report mode: Only show Home page
+            <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>Báo cáo</Link>
+          ) : (
+            // Edit mode: Show all other pages
+            <>
+              <Link to="/upload" className={`nav-link ${location.pathname === '/upload' ? 'active' : ''}`}>Tải lên file</Link>
+              <Link to="/select-news" className={`nav-link ${location.pathname === '/select-news' ? 'active' : ''}`}>Tin tức</Link>
+              <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Quản lý</Link>
+              <Link to="/analytics" className={`nav-link ${location.pathname === '/analytics' ? 'active' : ''}`}>Phân tích</Link>
+            </>
+          )}
         </div>
+
+        {/* Job Status Indicator */}
+        {isProcessing && currentJob && (
+          <div className="job-status-indicator">
+            <div className="job-status-content">
+              <div className="job-status-spinner"></div>
+              <span className="job-status-text">
+                Đang xử lý workflow... {formatElapsedTime(elapsedTime)}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Right side - Icons */}
         <div className="navbar-right">
@@ -121,6 +193,19 @@ function Layout() {
                   </svg>
                   Quản lý tài khoản
                 </a>
+                <div className="dropdown-divider"></div>
+                <button onClick={toggleMode} className="dropdown-item" style={{width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer'}}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    {appMode === 'report' ? (
+                      // Edit icon
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    ) : (
+                      // Report/Document icon
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" />
+                    )}
+                  </svg>
+                  {appMode === 'report' ? 'Chuyển sang chế độ Chỉnh sửa' : 'Chuyển sang chế độ Báo cáo'}
+                </button>
                 <div className="dropdown-divider"></div>
                 <a href="#logout" className="dropdown-item logout">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

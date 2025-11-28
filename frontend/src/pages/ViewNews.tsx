@@ -1,5 +1,6 @@
 import '../App.css'
 import { useState, useEffect, useMemo } from 'react'
+import { apiEndpoint } from '../config/api'
 
 const CATEGORIES = [
     { value: 'products', label: 'Sản phẩm & Dịch vụ mới' },
@@ -128,7 +129,7 @@ function ViewNews() {
                 setLoading(true)
                 setError(null)
 
-                const response = await fetch('http://localhost:5000/api/data/all')
+                const response = await fetch(apiEndpoint('api/data/all'))
                 const result = await response.json()
 
                 if (result.success) {

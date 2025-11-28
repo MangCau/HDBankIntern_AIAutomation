@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import '../App.css'
 
 // Dữ liệu giả cho demo
@@ -105,13 +105,12 @@ interface NewsItem {
 }
 
 function HomePage() {
-  const [selectedCategory, setSelectedCategory] = useState<Category>('products')
-  const [searchQuery, setSearchQuery] = useState('')
+  const [activeSection, setActiveSection] = useState<Category>('products')
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set())
 
-  const getCategoryData = (): NewsItem[] => {
-    return MOCK_DATA[selectedCategory]
-  }
+  const productsRef = useRef<HTMLElement>(null)
+  const bankingNewsRef = useRef<HTMLElement>(null)
+  const fintechNewsRef = useRef<HTMLElement>(null)
 
   const toggleExpanded = (id: number) => {
     const newSet = new Set(expandedItems)
@@ -123,28 +122,6 @@ function HomePage() {
     setExpandedItems(newSet)
   }
 
-  const getFilteredData = (): NewsItem[] => {
-    const data = getCategoryData()
-    if (!searchQuery.trim()) {
-      return data
-    }
-    const query = searchQuery.toLowerCase()
-    return data.filter(item =>
-      item.title.toLowerCase().includes(query) ||
-      item.summary.toLowerCase().includes(query) ||
-      item.bank.toLowerCase().includes(query)
-    )
-  }
-
-  const getCategoryTitle = (): string => {
-    const titles = {
-      products: 'Sản phẩm & Dịch vụ mới',
-      bankingNews: 'Tin tức ngành Ngân hàng',
-      fintechNews: 'Tin tức ngành Fintech'
-    }
-    return titles[selectedCategory]
-  }
-
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString)
     return date.toLocaleDateString('vi-VN', {
@@ -154,181 +131,145 @@ function HomePage() {
     })
   }
 
-  return (
-    <div className="page-container">
-      {/* Sidebar Menu */}
-      <aside className="sidebar">
-        <div className='logo-img'></div>
+  const scrollToSection = (section: Category) => {
+    const refs = {
+      products: productsRef,
+      bankingNews: bankingNewsRef,
+      fintechNews: fintechNewsRef
+    }
+    refs[section].current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setActiveSection(section)
+  }
 
-        {/* Nút xuất báo cáo */}
-        <button className="export-button">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Xuất báo cáo
-        </button>
+  // Detect which section is in view
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id as Category
+            setActiveSection(id)
+          }
+        })
+      },
+      { threshold: 0.3 }
+    )
 
-        {/* Thời gian */}
-        <div className="sidebar-section">
-          <h3 className="section-title">THỜI GIAN</h3>
-          <div className="section-content">
-            <p className="date-range">
-              Báo cáo được tổng hợp từ ngày <strong>01/01/2025</strong> đến ngày <strong>19/01/2025</strong>
-            </p>
-          </div>
-        </div>
+    const sections = [productsRef.current, bankingNewsRef.current, fintechNewsRef.current]
+    sections.forEach((section) => {
+      if (section) observer.observe(section)
+    })
 
-        {/* Thống kê nhanh */}
-        <div className="sidebar-section">
-          <h3 className="section-title">THỐNG KÊ NHANH</h3>
-          <div className="section-content">
-            <div className="stat-item">
-              <span className="stat-label">Sản phẩm & công nghệ mới</span>
-              <span className="stat-value">3</span>
+    return () => {
+      sections.forEach((section) => {
+        if (section) observer.unobserve(section)
+      })
+    }
+  }, [])
+
+  const renderNewsSection = (title: string, data: NewsItem[], sectionId: Category, ref: React.RefObject<HTMLElement>) => (
+    <section id={sectionId} ref={ref} className="report-section">
+      <div className="section-header">
+        <h2 className="section-title-large">{title}</h2>
+        <div className="section-divider"></div>
+      </div>
+
+      <div className="news-grid">
+        {data.map((item) => (
+          <article key={item.id} className="news-card-modern">
+            <div className="news-image-wrapper">
+              <img src={item.image} alt={item.title} className="news-image-modern" />
             </div>
-            <div className="stat-item">
-              <span className="stat-label">Tin tức ngành Ngân hàng</span>
-              <span className="stat-value">3</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Tin tức ngành Fintech</span>
-              <span className="stat-value">3</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-label">Các văn bản pháp luật</span>
-              <span className="stat-value">0</span>
-            </div>
-          </div>
-        </div>
+            <div className="news-content-modern">
+              <h3 className="news-title-modern">{item.title}</h3>
+              <p className="news-summary-modern">{item.summary}</p>
 
-        {/* Chọn danh mục */}
-        <div className="sidebar-section">
-          <h3 className="section-title">CHỌN DANH MỤC</h3>
-          <div className="section-content">
-            <select
-              className="category-select"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as Category)}
-            >
-              <option value="products">Sản phẩm & Dịch vụ mới</option>
-              <option value="bankingNews">Tin tức ngành Ngân hàng</option>
-              <option value="fintechNews">Tin tức ngành Fintech</option>
-            </select>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="main-content">
-        <div className="content-header">
-          <h1>{getCategoryTitle()}</h1>
-          <p className="content-subtitle">
-            Tổng cộng: <strong>{getFilteredData().length}</strong> mục
-          </p>
-        </div>
-
-        {/* Search Bar */}
-        <div className="search-bar-container">
-          <div className="search-bar">
-            <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Tìm kiếm theo tiêu đề, nội dung hoặc ngân hàng..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input"
-            />
-            {searchQuery && (
-              <button className="clear-search" onClick={() => setSearchQuery('')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="news-list">
-          {getFilteredData().map((item) => (
-            <article key={item.id} className="news-card">
-              <div className="news-image">
-                <img src={item.image} alt={item.title} />
-              </div>
-              <div className="news-content">
-                <h2 className="news-title">{item.title}</h2>
-                <p className="news-summary">{item.summary}</p>
-
-                {/* edit this to match the structure detail */}
-                {expandedItems.has(item.id) && (
-                  <div className="news-details">
-                    <div className="detail-section">
-                      <h4>Thông tin chi tiết</h4>
-                      <p><strong>Ngân hàng:</strong> {item.bank}</p>
-                      <p><strong>Ngày phát hành:</strong> {formatDate(item.publishDate)}</p>
-                      <p><strong>Nguồn:</strong> <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">{item.sourceUrl}</a></p>
-                    </div>
+              {expandedItems.has(item.id) && (
+                <div className="news-details-modern">
+                  <div className="detail-row">
+                    <span className="detail-label">Ngân hàng:</span>
+                    <span className="detail-value">{item.bank}</span>
                   </div>
-                )}
-                
-                <div className="news-meta">
-                  <div className="meta-item">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <span>{item.bank}</span>
+                  <div className="detail-row">
+                    <span className="detail-label">Ngày phát hành:</span>
+                    <span className="detail-value">{formatDate(item.publishDate)}</span>
                   </div>
-                  <div className="meta-item">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                      <line x1="16" y1="2" x2="16" y2="6" />
-                      <line x1="8" y1="2" x2="8" y2="6" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                    </svg>
-                    <span>{formatDate(item.publishDate)}</span>
+                  <div className="detail-row">
+                    <span className="detail-label">Nguồn:</span>
+                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="detail-link">
+                      {item.sourceUrl}
+                    </a>
                   </div>
-                  <button onClick={() => toggleExpanded(item.id)} className="source-link detail-toggle-btn">
-                    {expandedItems.has(item.id) ? (
-                      <>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="18 15 12 9 6 15" />
-                        </svg>
-                        <span>Thu gọn</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="1" />
-                          <circle cx="12" cy="5" r="1" />
-                          <circle cx="12" cy="19" r="1" />
-                        </svg>
-                        <span>Xem chi tiết</span>
-                      </>
-                    )}
-                  </button>
-                  <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="source-link">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                      <polyline points="15 3 21 3 21 9" />
-                      <line x1="10" y1="14" x2="21" y2="3" />
-                    </svg>
-                    <span>Xem nguồn</span>
-                  </a>
                 </div>
-              </div>
-            </article>
-          ))}
+              )}
 
-          {getFilteredData().length === 0 && (
-            <div className='no-results'>
-              <p>Không tìm thấy tin tức nào phù hợp với từ khóa tìm kiếm</p>
+              <div className="news-actions">
+                <button onClick={() => toggleExpanded(item.id)} className="action-btn">
+                  {expandedItems.has(item.id) ? 'Thu gọn' : 'Xem chi tiết'}
+                </button>
+                <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="action-btn secondary">
+                  Xem nguồn
+                </a>
+              </div>
             </div>
-          )}
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+
+  return (
+    <div className="report-container">
+      {/* Sticky Navigation Bar */}
+      <nav className="report-nav">
+        <div className="nav-content">
+          <button
+            className={`nav-item ${activeSection === 'products' ? 'active' : ''}`}
+            onClick={() => scrollToSection('products')}
+          >
+            <span className="nav-number">1</span>
+            <span className="nav-label">Sản phẩm & Dịch vụ</span>
+          </button>
+          <button
+            className={`nav-item ${activeSection === 'bankingNews' ? 'active' : ''}`}
+            onClick={() => scrollToSection('bankingNews')}
+          >
+            <span className="nav-number">2</span>
+            <span className="nav-label">Tin tức Ngân hàng</span>
+          </button>
+          <button
+            className={`nav-item ${activeSection === 'fintechNews' ? 'active' : ''}`}
+            onClick={() => scrollToSection('fintechNews')}
+          >
+            <span className="nav-number">3</span>
+            <span className="nav-label">Tin tức Fintech</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Main Report Content */}
+      <main className="report-main">
+        {/* Hero Section */}
+        <div className="report-hero">
+          <h1 className="report-title">Báo cáo Tổng hợp</h1>
+          <p className="report-subtitle">Thời gian: 01/01/2025 - 19/01/2025</p>
+        </div>
+
+        {/* Content Sections */}
+        {renderNewsSection('Sản phẩm & Dịch vụ mới', MOCK_DATA.products, 'products', productsRef)}
+        {renderNewsSection('Tin tức ngành Ngân hàng', MOCK_DATA.bankingNews, 'bankingNews', bankingNewsRef)}
+        {renderNewsSection('Tin tức ngành Fintech', MOCK_DATA.fintechNews, 'fintechNews', fintechNewsRef)}
+
+        {/* Export Button at Bottom */}
+        <div className="report-footer">
+          <button className="export-button-modern">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Xuất báo cáo
+          </button>
         </div>
       </main>
     </div>

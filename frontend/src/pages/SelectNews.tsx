@@ -1,8 +1,10 @@
 import '../App.css'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { apiEndpoint } from '../config/api'
+import { useJob } from '../contexts/JobContext'
 
-// API URL
-const API_URL = 'http://localhost:5000/api/data'
+// API URL - now uses environment variable for production
+const API_URL = apiEndpoint('api/data')
 
 // Data structure from database
 interface NewsItem {
@@ -385,28 +387,20 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
 }
 
 function SelectNews() {
-    // const triggerWorkflow = async () => {
-    //     await fetch("https://hdbproductautoreport.app.n8n.cloud/webhook-test/27e9e0c2-ff8a-4390-8c9a-dc319b2c9454", {
-    //         method: 'POST',
-    //         headers: {
-    //             "Content-Type": "application/json",
-    //         },
-    //         body: JSON.stringify({ 
-    //             message: "Start genning AI",
-    //          }),
-    //     })
-    // };
+    // Job context for background workflow
+    const { currentJob, startJob, updateJobStatus, isProcessing } = useJob()
+    const pollingIntervalRef = useRef<number | null>(null)
+
     // State for data from API
     const [newsData, setNewsData] = useState<NewsItem[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
-    // Initialize with current date range (last 7 days)
+    // Initialize with current month date range (from 1st of current month to today)
     const today = new Date()
-    const sevenDaysAgo = new Date(today)
-    sevenDaysAgo.setDate(today.getDate() - 7)
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
 
-    const [startDateISO, setStartDateISO] = useState(sevenDaysAgo.toISOString().split('T')[0])
+    const [startDateISO, setStartDateISO] = useState(firstDayOfMonth.toISOString().split('T')[0])
     const [endDateISO, setEndDateISO] = useState(today.toISOString().split('T')[0])
     const [selectedCategory, setSelectedCategory] = useState<string>('')
     const [isPriorityView, setIsPriorityView] = useState(false) // New state to track priority view
@@ -501,6 +495,63 @@ function SelectNews() {
         fetchData()
     }, [])
 
+    // Poll job status when there's an active job
+    useEffect(() => {
+        if (!currentJob || currentJob.status !== 'processing') {
+            // Clear polling if no active job
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current)
+                pollingIntervalRef.current = null
+            }
+            return
+        }
+
+        // Start polling every 5 seconds
+        const pollJobStatus = async () => {
+            try {
+                const response = await fetch(apiEndpoint(`api/n8n/job/${currentJob.id}`))
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`)
+                }
+
+                const jobData = await response.json()
+                console.log('Job status:', jobData)
+
+                if (jobData.status === 'completed') {
+                    updateJobStatus('completed', jobData.result)
+                    // Don't auto-navigate - let user click "Xem thông tin" button
+                    if (pollingIntervalRef.current) {
+                        clearInterval(pollingIntervalRef.current)
+                        pollingIntervalRef.current = null
+                    }
+                } else if (jobData.status === 'failed') {
+                    updateJobStatus('failed', null, jobData.error)
+                    alert(`Workflow thất bại: ${jobData.error}`)
+                    if (pollingIntervalRef.current) {
+                        clearInterval(pollingIntervalRef.current)
+                        pollingIntervalRef.current = null
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling job status:', error)
+            }
+        }
+
+        // Poll immediately
+        pollJobStatus()
+
+        // Then poll every 5 seconds
+        pollingIntervalRef.current = window.setInterval(pollJobStatus, 5000)
+
+        // Cleanup on unmount
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current)
+                pollingIntervalRef.current = null
+            }
+        }
+    }, [currentJob, updateJobStatus])
+
     // Convert ISO date (YYYY-MM-DD) to Vietnamese format (DD/MM/YYYY)
     const convertISOToVN = (isoDate: string): string => {
         const [year, month, day] = isoDate.split('-')
@@ -592,10 +643,61 @@ function SelectNews() {
         setCurrentPage(1)
     }, [selectedCategory, isPriorityView, startDateISO, endDateISO])
 
+    // Check if there are unsaved changes
+    const hasUnsavedChanges = () => {
+        if (!isSelectionMode) return false
+
+        const tempKeys = Object.keys(tempPriorities)
+        const confirmedKeys = Object.keys(confirmedPriorities)
+
+        // Check if keys are different
+        if (tempKeys.length !== confirmedKeys.length) return true
+
+        // Check if values are different
+        for (const key of tempKeys) {
+            if (tempPriorities[key] !== confirmedPriorities[key]) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    // Prompt user to save changes if there are unsaved changes
+    const promptSaveChanges = (): boolean => {
+        if (hasUnsavedChanges()) {
+            const userChoice = window.confirm(
+                'Bạn có thay đổi chưa lưu. Bạn có muốn lưu các thay đổi này không?\n\n' +
+                'Nhấn "OK" để lưu thay đổi.\n' +
+                'Nhấn "Hủy" để bỏ qua thay đổi.'
+            )
+
+            if (userChoice) {
+                // User wants to save - trigger update
+                handleUpdateSelection()
+                return false // Cancel the action until save completes
+            } else {
+                // User wants to discard changes
+                setTempPriorities({ ...confirmedPriorities })
+                return true // Continue with the action
+            }
+        }
+        return true // No unsaved changes, continue
+    }
+
     // Xử lý chọn tin tức
     const handleToggleSelectionMode = () => {
         if (isSelectionMode) {
-            // Nếu đang tắt chế độ chọn, reset tempPriorities về confirmedPriorities
+            // Check for unsaved changes before exiting selection mode
+            if (hasUnsavedChanges()) {
+                const shouldDiscard = window.confirm(
+                    'Bạn có thay đổi chưa lưu. Bạn có chắc chắn muốn hủy và bỏ qua các thay đổi này không?'
+                )
+                if (!shouldDiscard) {
+                    return // Don't exit selection mode
+                }
+            }
+            // Reset tempPriorities về confirmedPriorities
             setTempPriorities({ ...confirmedPriorities })
         }
         setIsSelectionMode(!isSelectionMode)
@@ -809,118 +911,172 @@ function SelectNews() {
                                 </p>
                             </div>
 
-                            {/* Nút TÓM TẮT */}
+                            {/* Workflow status and action buttons */}
                             <div style={{
                                 marginTop: '32px',
                                 display: 'flex',
-                                justifyContent: 'center'
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '20px'
                             }}>
-                                {/* <button
-                                    onClick={() => setCurrentStep('summary')}
-                                    style={{
-                                        padding: '14px 40px',
-                                        backgroundColor: '#F00020',
-                                        color: '#ffffff',
-                                        border: 'none',
+                                {/* Processing notification */}
+                                {isProcessing && (
+                                    <div style={{
+                                        backgroundColor: '#fff3cd',
+                                        border: '1px solid #ffc107',
                                         borderRadius: '8px',
-                                        fontSize: '16px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.3s ease',
-                                        boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
+                                        padding: '16px 24px',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '8px'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = '#c00018'
-                                        e.currentTarget.style.transform = 'translateY(-2px)'
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = '#F00020'
-                                        e.currentTarget.style.transform = 'translateY(0)'
-                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
-                                    }}
-                                >
-                                    📊 TÓM TẮT
-                                </button> */
-                                <button
-                                    onClick={async (e) => {
-                                        const button = e.currentTarget as HTMLButtonElement
-                                        const originalText = button.textContent
+                                        gap: '12px',
+                                        maxWidth: '500px',
+                                        width: '100%'
+                                    }}>
+                                        <div style={{
+                                            fontSize: '24px',
+                                            animation: 'spin 2s linear infinite'
+                                        }}>⏳</div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: '600', color: '#856404', marginBottom: '4px' }}>
+                                                Quá trình tóm tắt đang được thực hiện
+                                            </div>
+                                            <div style={{ fontSize: '14px', color: '#856404' }}>
+                                                Vui lòng đợi. Bạn có thể chuyển sang trang khác trong khi chờ đợi.
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
-                                        try {
-                                            // Show loading state on THIS button only
-                                            button.disabled = true
-                                            button.textContent = '⏳ Đang xử lý...'
-                                            button.style.cursor = 'not-allowed'
-                                            button.style.opacity = '0.7'
+                                {/* Completed notification with "Xem thông tin" button */}
+                                {currentJob?.status === 'completed' && (
+                                    <div style={{
+                                        backgroundColor: '#d4edda',
+                                        border: '1px solid #28a745',
+                                        borderRadius: '8px',
+                                        padding: '16px 24px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px',
+                                        maxWidth: '500px',
+                                        width: '100%'
+                                    }}>
+                                        <div style={{ fontSize: '24px' }}>✅</div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: '600', color: '#155724', marginBottom: '4px' }}>
+                                                Tóm tắt đã hoàn thành!
+                                            </div>
+                                            <div style={{ fontSize: '14px', color: '#155724' }}>
+                                                Nhấn nút bên dưới để xem kết quả.
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
-                                            // 1. Call n8n webhook directly and WAIT
-                                            const response = await fetch("https://hdbproductautoreport.app.n8n.cloud/webhook-test/4291406d-c1d0-4663-80f3-7f6b4f8fc188", {
-                                                method: "POST",
-                                                headers: { "Content-Type": "application/json" },
-                                                body: JSON.stringify({
-                                                    startDate: startDateISO,
-                                                    endDate: endDateISO,
-                                                })
-                                            });
-
-                                            if (!response.ok) {
-                                                throw new Error(`HTTP error! status: ${response.status}`)
+                                {/* Action button */}
+                                {currentJob?.status === 'completed' ? (
+                                    // Show "Xem thông tin" button when completed
+                                    <button
+                                        onClick={() => setCurrentStep('summary')}
+                                        style={{
+                                            padding: '14px 40px',
+                                            backgroundColor: '#28a745',
+                                            color: '#ffffff',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            fontSize: '16px',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease',
+                                            boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#218838'
+                                            e.currentTarget.style.transform = 'translateY(-2px)'
+                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.4)'
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#28a745'
+                                            e.currentTarget.style.transform = 'translateY(0)'
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(40, 167, 69, 0.3)'
+                                        }}
+                                    >
+                                        📊 Xem thông tin
+                                    </button>
+                                ) : (
+                                    // Show "TÓM TẮT" button when not processing or not completed
+                                    <button
+                                        onClick={async () => {
+                                            if (isProcessing) {
+                                                alert('Đang có workflow đang chạy. Vui lòng đợi hoàn tất.')
+                                                return
                                             }
 
-                                            const result = await response.json()
-                                            console.log('N8N workflow response:', result)
+                                            try {
+                                                console.log('Starting workflow...', { startDateISO, endDateISO })
 
-                                            // 2. Only AFTER n8n finishes successfully, move to summary step
-                                            setCurrentStep('summary')
+                                                // Call backend to start workflow
+                                                const response = await fetch(apiEndpoint('api/n8n/trigger-workflow'), {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({
+                                                        startDate: startDateISO,
+                                                        endDate: endDateISO,
+                                                    })
+                                                })
 
-                                            // Reset button state
-                                            button.disabled = false
-                                            button.textContent = originalText || '📊 TÓM TẮT'
-                                            button.style.cursor = 'pointer'
-                                            button.style.opacity = '1'
-                                        } catch (error) {
-                                            console.error('Error calling n8n webhook:', error)
-                                            alert('Lỗi khi gọi workflow n8n. Vui lòng thử lại.\n\nChi tiết: ' + (error as Error).message)
+                                                if (!response.ok) {
+                                                    throw new Error(`HTTP error! status: ${response.status}`)
+                                                }
 
-                                            // Reset button state on error
-                                            button.disabled = false
-                                            button.textContent = originalText || '📊 TÓM TẮT'
-                                            button.style.cursor = 'pointer'
-                                            button.style.opacity = '1'
-                                        }
-                                    }}
-                                    style={{
-                                        padding: '14px 40px',
-                                        backgroundColor: '#F00020',
-                                        color: '#ffffff',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        fontSize: '16px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.3s ease',
-                                        boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = '#c00018'
-                                        e.currentTarget.style.transform = 'translateY(-2px)'
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = '#F00020'
-                                        e.currentTarget.style.transform = 'translateY(0)'
-                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
-                                    }}
-                                >
-                                    📊 TÓM TẮT
-                                </button>}
+                                                const data = await response.json()
+                                                console.log('Workflow started:', data)
+
+                                                // Start job tracking
+                                                startJob(data.jobId, startDateISO, endDateISO)
+
+                                            } catch (error) {
+                                                console.error('Error starting workflow:', error)
+                                                alert('Lỗi khi bắt đầu workflow. Vui lòng thử lại.')
+                                            }
+                                        }}
+                                        disabled={isProcessing}
+                                        style={{
+                                            padding: '14px 40px',
+                                            backgroundColor: isProcessing ? '#999' : '#F00020',
+                                            color: '#ffffff',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            fontSize: '16px',
+                                            fontWeight: '600',
+                                            cursor: isProcessing ? 'not-allowed' : 'pointer',
+                                            transition: 'all 0.3s ease',
+                                            boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            opacity: isProcessing ? 0.7 : 1
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (!isProcessing) {
+                                                e.currentTarget.style.backgroundColor = '#c00018'
+                                                e.currentTarget.style.transform = 'translateY(-2px)'
+                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (!isProcessing) {
+                                                e.currentTarget.style.backgroundColor = '#F00020'
+                                                e.currentTarget.style.transform = 'translateY(0)'
+                                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
+                                            }
+                                        }}
+                                    >
+                                        📊 TÓM TẮT
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -1148,7 +1304,11 @@ function SelectNews() {
                                 type='date'
                                 id='start-date'
                                 value={startDateISO}
-                                onChange={(e) => setStartDateISO(e.target.value)}
+                                onChange={(e) => {
+                                    if (promptSaveChanges()) {
+                                        setStartDateISO(e.target.value)
+                                    }
+                                }}
                                 className='date-input'
                                 style={{ width: '100%' }}
                             />
@@ -1159,7 +1319,11 @@ function SelectNews() {
                                 type='date'
                                 id='end-date'
                                 value={endDateISO}
-                                onChange={(e) => setEndDateISO(e.target.value)}
+                                onChange={(e) => {
+                                    if (promptSaveChanges()) {
+                                        setEndDateISO(e.target.value)
+                                    }
+                                }}
                                 className='date-input'
                                 style={{ width: '100%' }}
                             />
@@ -1176,8 +1340,10 @@ function SelectNews() {
                             <div
                                 className='stat-item'
                                 onClick={() => {
-                                    setIsPriorityView(true)
-                                    setSelectedCategory('')
+                                    if (promptSaveChanges()) {
+                                        setIsPriorityView(true)
+                                        setSelectedCategory('')
+                                    }
                                 }}
                                 style={{
                                     cursor: 'pointer',
@@ -1220,8 +1386,10 @@ function SelectNews() {
                                         key={category}
                                         className='stat-item'
                                         onClick={() => {
-                                            setIsPriorityView(false)
-                                            setSelectedCategory(category)
+                                            if (promptSaveChanges()) {
+                                                setIsPriorityView(false)
+                                                setSelectedCategory(category)
+                                            }
                                         }}
                                         style={{
                                             cursor: 'pointer',
@@ -1338,6 +1506,12 @@ function SelectNews() {
                                         boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)'
                                     }}
                                     onClick={() => {
+                                        // Check for unsaved changes first
+                                        if (hasUnsavedChanges()) {
+                                            alert('Bạn có thay đổi chưa lưu. Vui lòng nhấn "Cập nhật" để lưu thay đổi trước khi xác nhận!')
+                                            return
+                                        }
+
                                         // Get all selected priority news
                                         const selectedNews = newsInDateRange.filter((item: NewsItem) => confirmedPriorities[item._id])
 
