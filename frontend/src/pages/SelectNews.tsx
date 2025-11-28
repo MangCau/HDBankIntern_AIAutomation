@@ -1,7 +1,6 @@
 import '../App.css'
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { apiEndpoint } from '../config/api'
-import { useJob } from '../contexts/JobContext'
 
 // API URL - now uses environment variable for production
 const API_URL = apiEndpoint('api/data')
@@ -51,101 +50,117 @@ interface FintechNewsSummaryItem extends BaseSummaryItem {
 
 type SummaryItem = ProductSummaryItem | BankingNewsSummaryItem | FintechNewsSummaryItem
 
-// Summary Content Component with mocked data
+// API data interfaces matching backend models
+interface NewProductData {
+    _id: string
+    bank: string | string[]
+    product_name: string
+    product_segment?: string
+    description?: string
+    image?: string
+    selected: boolean
+    date_published: string
+    source_type?: string
+    source_url?: string
+    pdf_file_name?: string
+}
+
+interface BankingTrendData {
+    _id: string
+    topic_group?: string
+    title: string
+    summary?: string
+    bank_related: string | string[]
+    image?: string
+    selected: boolean
+    source_type?: string
+    source_url?: string
+    published_date: string
+    pdf_file_name?: string
+}
+
+interface FintechNewsData {
+    _id: string
+    fintech_topic?: string
+    area_affected: string | string[]
+    title: string
+    summary?: string
+    organization?: string
+    image?: string
+    selected: boolean
+    source_type?: string
+    source_url?: string
+    published_date: string
+    pdf_file_name?: string
+}
+
+// Summary Content Component with real data from API
 function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) {
-    const [expandedItems, setExpandedItems] = useState<Record<string, Set<number>>>({
+    const [expandedItems, setExpandedItems] = useState<Record<string, Set<string>>>({
         'Sản phẩm & Dịch vụ mới': new Set(),
         'Tin tức ngành Ngân hàng': new Set(),
         'Tin tức ngành Fintech': new Set()
     })
     const [editingId, setEditingId] = useState<string | null>(null)
     const [tempEditValue, setTempEditValue] = useState('')
+    const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null)
 
-    // Helper functions
-    const getTitle = (item: SummaryItem): string => {
-        if ('product_name' in item) return item.product_name
-        return item.title
+    // Real data from API
+    const [newProducts, setNewProducts] = useState<NewProductData[]>([])
+    const [marketTrends, setMarketTrends] = useState<BankingTrendData[]>([])
+    const [fintechNews, setFintechNews] = useState<FintechNewsData[]>([])
+    const [loading, setLoading] = useState(true)
+
+    // Fetch selected items from API
+    useEffect(() => {
+        const fetchSummaryData = async () => {
+            try {
+                setLoading(true)
+                const response = await fetch(apiEndpoint('api/data/summary-selected'))
+                const result = await response.json()
+
+                if (result.success) {
+                    setNewProducts(result.data.newProducts || [])
+                    setMarketTrends(result.data.marketTrends || [])
+                    setFintechNews(result.data.fintechNews || [])
+                }
+            } catch (error) {
+                console.error('Error fetching summary data:', error)
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchSummaryData()
+    }, [])
+
+    // Convert data to categories
+    const dataByCategory: Record<string, any[]> = {
+        'Sản phẩm & Dịch vụ mới': newProducts,
+        'Tin tức ngành Ngân hàng': marketTrends,
+        'Tin tức ngành Fintech': fintechNews
     }
 
-    const getDisplayName = (item: SummaryItem): string => {
-        if ('organization' in item) return item.organization
-        if ('bank' in item) return Array.isArray(item.bank) ? item.bank.join(', ') : item.bank
+    // Helper functions
+    const getTitle = (item: any): string => {
+        if ('product_name' in item) return item.product_name
+        return item.title || ''
+    }
+
+    const getDisplayName = (item: any): string => {
+        if ('organization' in item) return item.organization || ''
+        if ('bank' in item) return Array.isArray(item.bank) ? item.bank.join(', ') : (item.bank || '')
+        if ('bank_related' in item) return Array.isArray(item.bank_related) ? item.bank_related.join(', ') : (item.bank_related || '')
         return ''
     }
 
-    // Mocked data for each category
-    const mockedDataByCategory: Record<string, SummaryItem[]> = {
-        'Sản phẩm & Dịch vụ mới': [
-            {
-                id: 1,
-                image: 'https://picsum.photos/seed/summary-product1/300/200',
-                product_name: 'Tóm tắt sản phẩm tiết kiệm HDBank Smart Save Plus và các sản phẩm tương tự',
-                product_segment: 'Tiết kiệm',
-                summary: 'Tổng hợp 3 sản phẩm tiết kiệm mới với lãi suất ưu đãi từ 6.0% - 6.5%/năm, kỳ hạn linh hoạt từ 1-24 tháng. Các ngân hàng đều cung cấp tính năng rút trước hạn không mất phí và hỗ trợ mở tài khoản online.',
-                bank: ['HDBank', 'VietinBank', 'Techcombank'],
-                date: '2025-01-15',
-                source_type: 'Tự động tóm tắt',
-                source_url: '#',
-                pdf_file_name: 'summary_tiet_kiem_2025.pdf'
-            },
-            {
-                id: 2,
-                image: 'https://picsum.photos/seed/summary-product2/300/200',
-                product_name: 'Xu hướng thẻ tín dụng hoàn tiền 2025',
-                product_segment: 'Thẻ tín dụng',
-                summary: 'Phân tích 5 thẻ tín dụng có chính sách hoàn tiền tốt nhất, bao gồm VietCredit Platinum (2%), TPBank EVO (1.5%) và Sacombank Priority (3% cho giao dịch quốc tế). Miễn phí thường niên năm đầu và hạn mức lên đến 500 triệu đồng.',
-                bank: ['VietCredit', 'TPBank', 'Sacombank'],
-                date: '2025-01-14',
-                source_type: 'Tự động tóm tắt',
-                source_url: '#',
-                pdf_file_name: 'summary_the_tin_dung_2025.pdf'
-            }
-        ],
-        'Tin tức ngành Ngân hàng': [
-            {
-                id: 3,
-                image: 'https://picsum.photos/seed/summary-banking1/300/200',
-                title: 'Tổng quan chính sách tín dụng Q1/2025',
-                topic_group: 'Chính sách tiền tệ',
-                summary: 'NHNN tăng room tín dụng 2% cho các ngân hàng đáp ứng đủ điều kiện. Techcombank và VPBank báo cáo tăng trưởng tín dụng mạnh mẽ trong quý đầu năm, đặc biệt ở phân khúc bán lẻ và SME. VPBank triển khai hệ thống Core Banking mới nâng cao năng lực xử lý.',
-                bank: ['NHNN', 'Techcombank', 'VPBank'],
-                date: '2025-01-18',
-                source_type: 'Tự động tóm tắt',
-                source_url: '#',
-                pdf_file_name: 'summary_chinh_sach_tin_dung_q1_2025.pdf'
-            }
-        ],
-        'Tin tức ngành Fintech': [
-            {
-                id: 4,
-                image: 'https://picsum.photos/seed/summary-fintech1/300/200',
-                title: 'Fintech và xu hướng thanh toán số năm 2025',
-                fintech_topic: 'Thanh toán số',
-                area_affected: 'Việt Nam',
-                organization: 'MoMo, ZaloPay',
-                summary: 'MoMo ra mắt tính năng đầu tư chứng khoán tích hợp, ZaloPay tích hợp BNPL với các sàn TMĐT lớn (Shopee, Lazada, Tiki). Người dùng có thể mua hàng trả góp 0% lãi suất. Xu hướng tích hợp AI và dịch vụ tài chính đang phát triển mạnh mẽ.',
-                date: '2025-01-19',
-                source_type: 'Tự động tóm tắt',
-                source_url: '#',
-                pdf_file_name: 'summary_thanh_toan_so_2025.pdf'
-            },
-            {
-                id: 5,
-                image: 'https://picsum.photos/seed/summary-fintech2/300/200',
-                title: 'Startup Fintech Việt Nam nhận vốn đầu tư kỷ lục',
-                fintech_topic: 'Đầu tư mạo hiểm',
-                area_affected: 'Đông Nam Á',
-                organization: 'Tima, VNPay',
-                summary: 'Tổng hợp các vòng gọi vốn thành công của các startup fintech Việt. Tima nhận Series C 50 triệu USD để mở rộng thị trường Đông Nam Á. Tổng giá trị đầu tư vào fintech Việt trong Q1/2025 đạt 150 triệu USD, tăng 45% so với cùng kỳ năm trước.',
-                date: '2025-01-17',
-                source_type: 'Tự động tóm tắt',
-                source_url: '#',
-                pdf_file_name: 'summary_dau_tu_fintech_2025.pdf'
-            }
-        ]
+    const getDate = (item: any): string => {
+        if ('date_published' in item) return item.date_published
+        if ('published_date' in item) return item.published_date
+        return ''
     }
 
-    const toggleExpanded = (category: string, id: number) => {
+    const toggleExpanded = (category: string, id: string) => {
         setExpandedItems(prev => {
             const newSet = new Set(prev[category])
             if (newSet.has(id)) {
@@ -174,12 +189,132 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
     }
 
     const formatDate = (dateString: string): string => {
+        if (!dateString) return 'N/A'
         const date = new Date(dateString)
         return date.toLocaleDateString('vi-VN', {
             day: '2-digit',
             month: '2-digit',
             year: 'numeric'
         })
+    }
+
+    const handleImageUpload = async (categoryTitle: string, itemId: string, file: File) => {
+        try {
+            // Convert image to base64
+            const reader = new FileReader()
+            reader.onloadend = async () => {
+                const base64Image = reader.result as string
+
+                // Determine collection name
+                let collection = ''
+                if (categoryTitle === 'Sản phẩm & Dịch vụ mới') collection = 'new-products'
+                else if (categoryTitle === 'Tin tức ngành Ngân hàng') collection = 'market-trends'
+                else if (categoryTitle === 'Tin tức ngành Fintech') collection = 'fintech-news'
+
+                // Update image in backend
+                const response = await fetch(apiEndpoint(`api/data/update-image/${collection}/${itemId}`), {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64Image })
+                })
+
+                const result = await response.json()
+                if (result.success) {
+                    // Update local state
+                    if (collection === 'new-products') {
+                        setNewProducts(prev => prev.map(item =>
+                            item._id === itemId ? { ...item, image: base64Image } : item
+                        ))
+                    } else if (collection === 'market-trends') {
+                        setMarketTrends(prev => prev.map(item =>
+                            item._id === itemId ? { ...item, image: base64Image } : item
+                        ))
+                    } else if (collection === 'fintech-news') {
+                        setFintechNews(prev => prev.map(item =>
+                            item._id === itemId ? { ...item, image: base64Image } : item
+                        ))
+                    }
+                    alert('Đã upload ảnh thành công!')
+                } else {
+                    alert('Upload ảnh thất bại!')
+                }
+            }
+            reader.readAsDataURL(file)
+        } catch (error) {
+            console.error('Error uploading image:', error)
+            alert('Có lỗi xảy ra khi upload ảnh!')
+        }
+    }
+
+    const handleGenerateImage = async (categoryTitle: string, itemId: string, item: any) => {
+        try {
+            setUploadingImageFor(itemId)
+
+            // Determine collection name
+            let collection = ''
+            if (categoryTitle === 'Sản phẩm & Dịch vụ mới') collection = 'new-products'
+            else if (categoryTitle === 'Tin tức ngành Ngân hàng') collection = 'market-trends'
+            else if (categoryTitle === 'Tin tức ngành Fintech') collection = 'fintech-news'
+
+            // Get summary (use description for products, summary for others)
+            const summary = item.summary || item.description || getTitle(item)
+
+            // Generate image
+            const response = await fetch(apiEndpoint(`api/data/generate-image/${collection}/${itemId}`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    summary,
+                    category: categoryTitle
+                })
+            })
+
+            const result = await response.json()
+            if (result.success) {
+                // Update local state with generated image
+                if (collection === 'new-products') {
+                    setNewProducts(prev => prev.map(i =>
+                        i._id === itemId ? result.data : i
+                    ))
+                } else if (collection === 'market-trends') {
+                    setMarketTrends(prev => prev.map(i =>
+                        i._id === itemId ? result.data : i
+                    ))
+                } else if (collection === 'fintech-news') {
+                    setFintechNews(prev => prev.map(i =>
+                        i._id === itemId ? result.data : i
+                    ))
+                }
+                alert('Đã tạo ảnh thành công!')
+            } else {
+                alert(`Tạo ảnh thất bại: ${result.message}`)
+            }
+        } catch (error) {
+            console.error('Error generating image:', error)
+            alert('Có lỗi xảy ra khi tạo ảnh!')
+        } finally {
+            setUploadingImageFor(null)
+        }
+    }
+
+    if (loading) {
+        return (
+            <div style={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #dee2e6',
+                borderRadius: '12px',
+                padding: '32px',
+                minHeight: '500px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+            }}>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+                    <p style={{ fontSize: '16px', color: '#6c757d' }}>Đang tải dữ liệu...</p>
+                </div>
+            </div>
+        )
     }
 
     return (
@@ -190,7 +325,7 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
             padding: '32px',
             minHeight: '500px'
         }}>
-            {Object.entries(mockedDataByCategory).map(([categoryTitle, items]) => (
+            {Object.entries(dataByCategory).map(([categoryTitle, items]) => (
                 <div key={categoryTitle} style={{ marginBottom: '48px' }}>
                     <h2 style={{
                         fontSize: '22px',
@@ -204,14 +339,258 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                     </h2>
 
                     <div className="news-list">
-                        {items.map((item) => {
-                            const uniqueKey = `${categoryTitle}-${item.id}`
-                            const isExpanded = expandedItems[categoryTitle]?.has(item.id) || false
+                        {items.map((item: any) => {
+                            const uniqueKey = `${categoryTitle}-${item._id}`
+                            const isExpanded = expandedItems[categoryTitle]?.has(item._id) || false
 
                             return (
-                                <article key={item.id} className="news-card">
-                                    <div className="news-image">
-                                        <img src={item.image} alt={getTitle(item)} />
+                                <article key={item._id} className="news-card">
+                                    <div className="news-image" style={{ position: 'relative' }}>
+                                        {item.image ? (
+                                            <div style={{ position: 'relative' }}>
+                                                <div style={{ position: 'relative', cursor: 'pointer' }}
+                                                    onClick={() => {
+                                                        const input = document.createElement('input')
+                                                        input.type = 'file'
+                                                        input.accept = 'image/*'
+                                                        input.onchange = (e) => {
+                                                            const file = (e.target as HTMLInputElement).files?.[0]
+                                                            if (file) {
+                                                                if (window.confirm('Bạn có muốn thay đổi ảnh này?')) {
+                                                                    handleImageUpload(categoryTitle, item._id, file)
+                                                                }
+                                                            }
+                                                        }
+                                                        input.click()
+                                                    }}
+                                                    onDragOver={(e) => {
+                                                        e.preventDefault()
+                                                        e.stopPropagation()
+                                                        const overlay = e.currentTarget.querySelector('[data-overlay]') as HTMLElement
+                                                        if (overlay) {
+                                                            overlay.style.backgroundColor = 'rgba(240, 0, 32, 0.7)'
+                                                            overlay.style.opacity = '1'
+                                                        }
+                                                    }}
+                                                    onDragLeave={(e) => {
+                                                        e.preventDefault()
+                                                        e.stopPropagation()
+                                                        const overlay = e.currentTarget.querySelector('[data-overlay]') as HTMLElement
+                                                        if (overlay) {
+                                                            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0)'
+                                                            overlay.style.opacity = '0'
+                                                        }
+                                                    }}
+                                                    onDrop={(e) => {
+                                                        e.preventDefault()
+                                                        e.stopPropagation()
+                                                        const overlay = e.currentTarget.querySelector('[data-overlay]') as HTMLElement
+                                                        if (overlay) {
+                                                            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0)'
+                                                            overlay.style.opacity = '0'
+                                                        }
+                                                        const file = e.dataTransfer.files[0]
+                                                        if (file && file.type.startsWith('image/')) {
+                                                            if (window.confirm('Bạn có muốn thay đổi ảnh này?')) {
+                                                                handleImageUpload(categoryTitle, item._id, file)
+                                                            }
+                                                        }
+                                                    }}
+                                                >
+                                                    <img src={item.image} alt={getTitle(item)} style={{ display: 'block', width: '100%' }} />
+                                                    <div
+                                                        data-overlay
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: 0,
+                                                            left: 0,
+                                                            right: 0,
+                                                            bottom: 0,
+                                                            backgroundColor: 'rgba(0, 0, 0, 0)',
+                                                            display: 'flex',
+                                                            justifyContent: 'center',
+                                                            alignItems: 'center',
+                                                            opacity: 0,
+                                                            transition: 'all 0.3s ease',
+                                                            pointerEvents: 'none'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
+                                                            e.currentTarget.style.opacity = '1'
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0)'
+                                                            e.currentTarget.style.opacity = '0'
+                                                        }}
+                                                    >
+                                                        <div style={{ color: '#ffffff', textAlign: 'center' }}>
+                                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ margin: '0 auto 8px' }}>
+                                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                                                <polyline points="21 15 16 10 5 21"/>
+                                                            </svg>
+                                                            <p style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>Click hoặc kéo thả để thay đổi ảnh</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {uploadingImageFor !== item._id && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            handleGenerateImage(categoryTitle, item._id, item)
+                                                        }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            bottom: '12px',
+                                                            right: '12px',
+                                                            padding: '8px 16px',
+                                                            backgroundColor: '#F00020',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            fontSize: '13px',
+                                                            fontWeight: '600',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            transition: 'all 0.2s ease',
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#c00018'
+                                                            e.currentTarget.style.transform = 'translateY(-1px)'
+                                                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#F00020'
+                                                            e.currentTarget.style.transform = 'translateY(0)'
+                                                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                                                        }}
+                                                    >
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                            <polyline points="7 10 12 15 17 10"></polyline>
+                                                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                                                        </svg>
+                                                        Gen ảnh
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div style={{ position: 'relative' }}>
+                                                <div style={{
+                                                    width: '100%',
+                                                    height: '200px',
+                                                    border: '2px dashed #dee2e6',
+                                                    borderRadius: '8px',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+                                                    backgroundColor: '#f8f9fa',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.3s ease'
+                                                }}
+                                                onClick={() => {
+                                                    const input = document.createElement('input')
+                                                    input.type = 'file'
+                                                    input.accept = 'image/*'
+                                                    input.onchange = (e) => {
+                                                        const file = (e.target as HTMLInputElement).files?.[0]
+                                                        if (file) {
+                                                            handleImageUpload(categoryTitle, item._id, file)
+                                                        }
+                                                    }
+                                                    input.click()
+                                                }}
+                                                onDragOver={(e) => {
+                                                    e.preventDefault()
+                                                    e.currentTarget.style.borderColor = '#F00020'
+                                                    e.currentTarget.style.backgroundColor = '#fff5f5'
+                                                }}
+                                                onDragLeave={(e) => {
+                                                    e.currentTarget.style.borderColor = '#dee2e6'
+                                                    e.currentTarget.style.backgroundColor = '#f8f9fa'
+                                                }}
+                                                onDrop={(e) => {
+                                                    e.preventDefault()
+                                                    e.currentTarget.style.borderColor = '#dee2e6'
+                                                    e.currentTarget.style.backgroundColor = '#f8f9fa'
+                                                    const file = e.dataTransfer.files[0]
+                                                    if (file && file.type.startsWith('image/')) {
+                                                        handleImageUpload(categoryTitle, item._id, file)
+                                                    }
+                                                }}
+                                                >
+                                                    {uploadingImageFor === item._id ? (
+                                                        <>
+                                                            <div style={{ fontSize: '48px', marginBottom: '12px', animation: 'spin 1s linear infinite' }}>⏳</div>
+                                                            <p style={{ margin: 0, fontSize: '14px', color: '#6c757d', fontWeight: '500' }}>
+                                                                Đang tạo ảnh...
+                                                            </p>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6c757d" strokeWidth="2">
+                                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                                                <polyline points="21 15 16 10 5 21"/>
+                                                            </svg>
+                                                            <p style={{ margin: '12px 0 4px 0', fontSize: '14px', color: '#6c757d', fontWeight: '500' }}>
+                                                                Kéo thả ảnh vào đây
+                                                            </p>
+                                                            <p style={{ margin: 0, fontSize: '12px', color: '#adb5bd' }}>
+                                                                hoặc click để chọn file
+                                                            </p>
+                                                        </>
+                                                    )}
+                                                </div>
+                                                {uploadingImageFor !== item._id && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            handleGenerateImage(categoryTitle, item._id, item)
+                                                        }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            bottom: '12px',
+                                                            right: '12px',
+                                                            padding: '8px 16px',
+                                                            backgroundColor: '#F00020',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            fontSize: '13px',
+                                                            fontWeight: '600',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            transition: 'all 0.2s ease',
+                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#c00018'
+                                                            e.currentTarget.style.transform = 'translateY(-1px)'
+                                                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#F00020'
+                                                            e.currentTarget.style.transform = 'translateY(0)'
+                                                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                                                        }}
+                                                    >
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                            <polyline points="7 10 12 15 17 10"></polyline>
+                                                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                                                        </svg>
+                                                        Gen ảnh
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="news-content">
                                         <h2 className="news-title">{getTitle(item)}</h2>
@@ -241,8 +620,8 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                                             </div>
                                         ) : (
                                             <div className="summary-with-edit">
-                                                <p className="news-summary">{item.summary}</p>
-                                                <button className="edit-summary-btn" onClick={() => handleEditSummary(uniqueKey, item.summary)}>
+                                                <p className="news-summary">{item.summary || item.description || 'Chưa có tóm tắt'}</p>
+                                                <button className="edit-summary-btn" onClick={() => handleEditSummary(uniqueKey, item.summary || item.description || '')}>
                                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                                                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -258,35 +637,44 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                                                     <h4>Thông tin chi tiết</h4>
 
                                                     {/* Product specific fields */}
-                                                    {'product_segment' in item && (
+                                                    {item.product_segment && (
                                                         <p><strong>Phân khúc sản phẩm:</strong> {item.product_segment}</p>
                                                     )}
 
                                                     {/* Banking News specific fields */}
-                                                    {'topic_group' in item && (
+                                                    {item.topic_group && (
                                                         <p><strong>Nhóm chủ đề:</strong> {item.topic_group}</p>
                                                     )}
 
                                                     {/* Fintech News specific fields */}
-                                                    {'fintech_topic' in item && (
-                                                        <>
-                                                            <p><strong>Chủ đề Fintech:</strong> {item.fintech_topic}</p>
-                                                            <p><strong>Phạm vi ảnh hưởng:</strong> {item.area_affected}</p>
-                                                        </>
+                                                    {item.fintech_topic && (
+                                                        <p><strong>Chủ đề Fintech:</strong> {item.fintech_topic}</p>
+                                                    )}
+                                                    {item.area_affected && (
+                                                        <p><strong>Phạm vi ảnh hưởng:</strong> {
+                                                            Array.isArray(item.area_affected)
+                                                                ? item.area_affected.join(', ')
+                                                                : item.area_affected
+                                                        }</p>
                                                     )}
 
                                                     {/* Common fields */}
-                                                    {'bank' in item && (
+                                                    {item.bank && (
                                                         <p><strong>Ngân hàng:</strong> {Array.isArray(item.bank) ? item.bank.join(', ') : item.bank}</p>
                                                     )}
-                                                    {'organization' in item && (
+                                                    {item.bank_related && (
+                                                        <p><strong>Ngân hàng liên quan:</strong> {Array.isArray(item.bank_related) ? item.bank_related.join(', ') : item.bank_related}</p>
+                                                    )}
+                                                    {item.organization && (
                                                         <p><strong>Tổ chức:</strong> {item.organization}</p>
                                                     )}
 
-                                                    <p><strong>Loại nguồn:</strong> {item.source_type}</p>
-                                                    <p><strong>File PDF:</strong> {item.pdf_file_name}</p>
-                                                    <p><strong>Ngày phát hành:</strong> {formatDate(item.date)}</p>
-                                                    <p><strong>Nguồn:</strong> <a href={item.source_url} target="_blank" rel="noopener noreferrer">{item.source_url}</a></p>
+                                                    {item.source_type && <p><strong>Loại nguồn:</strong> {item.source_type}</p>}
+                                                    {item.pdf_file_name && <p><strong>File PDF:</strong> {item.pdf_file_name}</p>}
+                                                    <p><strong>Ngày phát hành:</strong> {formatDate(getDate(item))}</p>
+                                                    {item.source_url && (
+                                                        <p><strong>Nguồn:</strong> <a href={item.source_url} target="_blank" rel="noopener noreferrer">{item.source_url}</a></p>
+                                                    )}
                                                     <p><strong>Nguồn gốc:</strong> Tự động tóm tắt từ {confirmedNewsCount} tin tức đã chọn</p>
                                                 </div>
                                             </div>
@@ -306,9 +694,9 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                                                     <line x1="8" y1="2" x2="8" y2="6" />
                                                     <line x1="3" y1="10" x2="21" y2="10" />
                                                 </svg>
-                                                <span>{formatDate(item.date)}</span>
+                                                <span>{formatDate(getDate(item))}</span>
                                             </div>
-                                            <button onClick={() => toggleExpanded(categoryTitle, item.id)} className="source-link detail-toggle-btn">
+                                            <button onClick={() => toggleExpanded(categoryTitle, item._id)} className="source-link detail-toggle-btn">
                                                 {isExpanded ? (
                                                     <>
                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -387,10 +775,6 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
 }
 
 function SelectNews() {
-    // Job context for background workflow
-    const { currentJob, startJob, updateJobStatus, isProcessing } = useJob()
-    const pollingIntervalRef = useRef<number | null>(null)
-
     // State for data from API
     const [newsData, setNewsData] = useState<NewsItem[]>([])
     const [loading, setLoading] = useState(true)
@@ -495,62 +879,6 @@ function SelectNews() {
         fetchData()
     }, [])
 
-    // Poll job status when there's an active job
-    useEffect(() => {
-        if (!currentJob || currentJob.status !== 'processing') {
-            // Clear polling if no active job
-            if (pollingIntervalRef.current) {
-                clearInterval(pollingIntervalRef.current)
-                pollingIntervalRef.current = null
-            }
-            return
-        }
-
-        // Start polling every 5 seconds
-        const pollJobStatus = async () => {
-            try {
-                const response = await fetch(apiEndpoint(`api/n8n/job/${currentJob.id}`))
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`)
-                }
-
-                const jobData = await response.json()
-                console.log('Job status:', jobData)
-
-                if (jobData.status === 'completed') {
-                    updateJobStatus('completed', jobData.result)
-                    // Don't auto-navigate - let user click "Xem thông tin" button
-                    if (pollingIntervalRef.current) {
-                        clearInterval(pollingIntervalRef.current)
-                        pollingIntervalRef.current = null
-                    }
-                } else if (jobData.status === 'failed') {
-                    updateJobStatus('failed', null, jobData.error)
-                    alert(`Workflow thất bại: ${jobData.error}`)
-                    if (pollingIntervalRef.current) {
-                        clearInterval(pollingIntervalRef.current)
-                        pollingIntervalRef.current = null
-                    }
-                }
-            } catch (error) {
-                console.error('Error polling job status:', error)
-            }
-        }
-
-        // Poll immediately
-        pollJobStatus()
-
-        // Then poll every 5 seconds
-        pollingIntervalRef.current = window.setInterval(pollJobStatus, 5000)
-
-        // Cleanup on unmount
-        return () => {
-            if (pollingIntervalRef.current) {
-                clearInterval(pollingIntervalRef.current)
-                pollingIntervalRef.current = null
-            }
-        }
-    }, [currentJob, updateJobStatus])
 
     // Convert ISO date (YYYY-MM-DD) to Vietnamese format (DD/MM/YYYY)
     const convertISOToVN = (isoDate: string): string => {
@@ -603,6 +931,84 @@ function SelectNews() {
         const categories = newsInDateRange.map((item: NewsItem) => item.category)
         return Array.from(new Set(categories))
     }, [newsInDateRange])
+
+    // State for sorted categories
+    const [sortedCategories, setSortedCategories] = useState<string[]>([])
+
+    // Sort categories using Gemini API
+    useEffect(() => {
+        const sortCategories = async () => {
+            if (availableCategories.length === 0) {
+                setSortedCategories([])
+                return
+            }
+
+            // If only 1 category, no need to sort
+            if (availableCategories.length === 1) {
+                setSortedCategories(availableCategories)
+                return
+            }
+
+            try {
+                const apiKey = 'AIzaSyAfq-PTjr__ZiThTHLGRkLl_H6249xRso4'
+                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`
+
+                const prompt = `Role: Bạn là một Chuyên gia Phân tích Chiến lược Ngân hàng & Fintech.
+
+Task: Sắp xếp lại danh sách các category đầu vào theo thứ tự ưu tiên giảm dần (từ quan trọng nhất đến ít quan trọng nhất).
+
+Priority Logic (Hệ tư duy sắp xếp):
+
+Tier 1 - Thị trường & Thương hiệu (Market & Brand Health): Ưu tiên cao nhất cho các thông tin liên quan trực tiếp đến Sản phẩm/Dịch vụ, Ưu đãi, và Sức khỏe thương hiệu (các bài đăng tương tác MXH về HDBank, Vikki, và Đối thủ cạnh tranh).
+
+Tier 2 - Vĩ mô & Ngành liên quan (Macro): Tin tức kinh tế vĩ mô, Bất động sản.
+
+Tier 3 - Công nghệ & Đổi mới (Tech & Innovation): Tiếp theo là các xu hướng về Ứng dụng Công nghệ, Fintech, và Trí tuệ nhân tạo (AI) trong tài chính ngân hàng.
+
+Tier 4 - Khách hàng & Xã hội & Ecosystem (Consumer Context): Xu hướng tiêu dùng, Đời sống, Việc làm, Sức khỏe, Giáo dục, và các ngành trong hệ sinh thái liên kết (Hàng không).
+
+Tier 5 - Thông tin bổ trợ: Giải trí, Du lịch chung, null.
+
+Input Categories: ${JSON.stringify(availableCategories)}
+
+Output Format: Trả về kết quả duy nhất là một JSON Array chứa các tên category đã được sắp xếp. Loại bỏ các giá trị null hoặc rỗng. CHỈ TRẢ VỀ JSON ARRAY, KHÔNG CÓ TEXT GIẢI THÍCH KHÁC.`
+
+                const response = await fetch(geminiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: prompt }]
+                        }]
+                    })
+                })
+
+                const result = await response.json()
+
+                if (result.candidates && result.candidates[0]) {
+                    const text = result.candidates[0].content.parts[0].text
+
+                    // Extract JSON array from response
+                    const jsonMatch = text.match(/\[[\s\S]*\]/)
+                    if (jsonMatch) {
+                        const sorted = JSON.parse(jsonMatch[0])
+                        setSortedCategories(sorted.filter((cat: string) => cat && availableCategories.includes(cat)))
+                    } else {
+                        // Fallback to original order if parsing fails
+                        setSortedCategories(availableCategories)
+                    }
+                } else {
+                    setSortedCategories(availableCategories)
+                }
+            } catch (error) {
+                console.error('Error sorting categories:', error)
+                // Fallback to original order on error
+                setSortedCategories(availableCategories)
+            }
+        }
+
+        sortCategories()
+    }, [availableCategories])
 
     // Auto-select first category when date changes
     useMemo(() => {
@@ -911,172 +1317,42 @@ function SelectNews() {
                                 </p>
                             </div>
 
-                            {/* Workflow status and action buttons */}
+                            {/* Button to proceed to summary */}
                             <div style={{
                                 marginTop: '32px',
                                 display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                gap: '20px'
+                                justifyContent: 'center'
                             }}>
-                                {/* Processing notification */}
-                                {isProcessing && (
-                                    <div style={{
-                                        backgroundColor: '#fff3cd',
-                                        border: '1px solid #ffc107',
+                                <button
+                                    onClick={() => setCurrentStep('summary')}
+                                    style={{
+                                        padding: '14px 40px',
+                                        backgroundColor: '#F00020',
+                                        color: '#ffffff',
+                                        border: 'none',
                                         borderRadius: '8px',
-                                        padding: '16px 24px',
+                                        fontSize: '16px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s ease',
+                                        boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '12px',
-                                        maxWidth: '500px',
-                                        width: '100%'
-                                    }}>
-                                        <div style={{
-                                            fontSize: '24px',
-                                            animation: 'spin 2s linear infinite'
-                                        }}>⏳</div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: '600', color: '#856404', marginBottom: '4px' }}>
-                                                Quá trình tóm tắt đang được thực hiện
-                                            </div>
-                                            <div style={{ fontSize: '14px', color: '#856404' }}>
-                                                Vui lòng đợi. Bạn có thể chuyển sang trang khác trong khi chờ đợi.
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Completed notification with "Xem thông tin" button */}
-                                {currentJob?.status === 'completed' && (
-                                    <div style={{
-                                        backgroundColor: '#d4edda',
-                                        border: '1px solid #28a745',
-                                        borderRadius: '8px',
-                                        padding: '16px 24px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        maxWidth: '500px',
-                                        width: '100%'
-                                    }}>
-                                        <div style={{ fontSize: '24px' }}>✅</div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: '600', color: '#155724', marginBottom: '4px' }}>
-                                                Tóm tắt đã hoàn thành!
-                                            </div>
-                                            <div style={{ fontSize: '14px', color: '#155724' }}>
-                                                Nhấn nút bên dưới để xem kết quả.
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Action button */}
-                                {currentJob?.status === 'completed' ? (
-                                    // Show "Xem thông tin" button when completed
-                                    <button
-                                        onClick={() => setCurrentStep('summary')}
-                                        style={{
-                                            padding: '14px 40px',
-                                            backgroundColor: '#28a745',
-                                            color: '#ffffff',
-                                            border: 'none',
-                                            borderRadius: '8px',
-                                            fontSize: '16px',
-                                            fontWeight: '600',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.3s ease',
-                                            boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.backgroundColor = '#218838'
-                                            e.currentTarget.style.transform = 'translateY(-2px)'
-                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.4)'
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.backgroundColor = '#28a745'
-                                            e.currentTarget.style.transform = 'translateY(0)'
-                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(40, 167, 69, 0.3)'
-                                        }}
-                                    >
-                                        📊 Xem thông tin
-                                    </button>
-                                ) : (
-                                    // Show "TÓM TẮT" button when not processing or not completed
-                                    <button
-                                        onClick={async () => {
-                                            if (isProcessing) {
-                                                alert('Đang có workflow đang chạy. Vui lòng đợi hoàn tất.')
-                                                return
-                                            }
-
-                                            try {
-                                                console.log('Starting workflow...', { startDateISO, endDateISO })
-
-                                                // Call backend to start workflow
-                                                const response = await fetch(apiEndpoint('api/n8n/trigger-workflow'), {
-                                                    method: "POST",
-                                                    headers: { "Content-Type": "application/json" },
-                                                    body: JSON.stringify({
-                                                        startDate: startDateISO,
-                                                        endDate: endDateISO,
-                                                    })
-                                                })
-
-                                                if (!response.ok) {
-                                                    throw new Error(`HTTP error! status: ${response.status}`)
-                                                }
-
-                                                const data = await response.json()
-                                                console.log('Workflow started:', data)
-
-                                                // Start job tracking
-                                                startJob(data.jobId, startDateISO, endDateISO)
-
-                                            } catch (error) {
-                                                console.error('Error starting workflow:', error)
-                                                alert('Lỗi khi bắt đầu workflow. Vui lòng thử lại.')
-                                            }
-                                        }}
-                                        disabled={isProcessing}
-                                        style={{
-                                            padding: '14px 40px',
-                                            backgroundColor: isProcessing ? '#999' : '#F00020',
-                                            color: '#ffffff',
-                                            border: 'none',
-                                            borderRadius: '8px',
-                                            fontSize: '16px',
-                                            fontWeight: '600',
-                                            cursor: isProcessing ? 'not-allowed' : 'pointer',
-                                            transition: 'all 0.3s ease',
-                                            boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            opacity: isProcessing ? 0.7 : 1
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            if (!isProcessing) {
-                                                e.currentTarget.style.backgroundColor = '#c00018'
-                                                e.currentTarget.style.transform = 'translateY(-2px)'
-                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
-                                            }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            if (!isProcessing) {
-                                                e.currentTarget.style.backgroundColor = '#F00020'
-                                                e.currentTarget.style.transform = 'translateY(0)'
-                                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
-                                            }
-                                        }}
-                                    >
-                                        📊 TÓM TẮT
-                                    </button>
-                                )}
+                                        gap: '8px'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = '#c00018'
+                                        e.currentTarget.style.transform = 'translateY(-2px)'
+                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = '#F00020'
+                                        e.currentTarget.style.transform = 'translateY(0)'
+                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
+                                    }}
+                                >
+                                    📊 Tóm tắt
+                                </button>
                             </div>
                         </div>
 

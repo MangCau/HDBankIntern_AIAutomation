@@ -9,6 +9,8 @@ const newProductServiceSchema = new mongoose.Schema({
   product_segment: String,
   // product_category: String,
   description: String,
+  image: String,
+  selected:Boolean,
   date_published: mongoose.Schema.Types.Mixed, // Support both String and Date
   source_type: String,
   source_url: String,

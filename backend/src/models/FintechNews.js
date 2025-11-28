@@ -10,6 +10,8 @@ const fintechNewsSchema = new mongoose.Schema({
 
   summary: String,
   organization: String,
+  image: String,
+  selected:Boolean,
   // impact_area: String,
   source_type: String,
   source_url: String,

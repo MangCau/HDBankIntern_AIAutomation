@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const axios = require('axios');
 const NewProductService = require('../models/NewProductService');
 const BankingMarketTrend = require('../models/BankingMarketTrend');
 const FintechNews = require('../models/FintechNews');
@@ -115,6 +116,169 @@ router.patch('/header-processing', checkDbConnection, async (req, res) => {
     res.json({ success: true, data: results });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get all selected items from all 3 summary tables for summary view
+router.get('/summary-selected', checkDbConnection, async (req, res) => {
+  try {
+    const [newProducts, marketTrends, fintechNews] = await Promise.all([
+      NewProductService.find({ selected: true }).sort({ date_published: -1 }),
+      BankingMarketTrend.find({ selected: true }).sort({ published_date: -1 }),
+      FintechNews.find({ selected: true }).sort({ published_date: -1 })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        newProducts,
+        marketTrends,
+        fintechNews
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update image for a specific item in any of the 3 tables
+router.patch('/update-image/:collection/:id', checkDbConnection, async (req, res) => {
+  try {
+    const { collection, id } = req.params;
+    const { image } = req.body;
+
+    let Model;
+    switch (collection) {
+      case 'new-products':
+        Model = NewProductService;
+        break;
+      case 'market-trends':
+        Model = BankingMarketTrend;
+        break;
+      case 'fintech-news':
+        Model = FintechNews;
+        break;
+      default:
+        return res.status(400).json({ success: false, message: 'Invalid collection' });
+    }
+
+    const updated = await Model.findByIdAndUpdate(
+      id,
+      { image },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Item not found' });
+    }
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Generate image using Imagen 3 API
+router.post('/generate-image/:collection/:id', checkDbConnection, async (req, res) => {
+  try {
+    const { collection, id } = req.params;
+    const { summary, category } = req.body;
+
+    // Determine which model to use
+    let Model;
+    switch (collection) {
+      case 'new-products':
+        Model = NewProductService;
+        break;
+      case 'market-trends':
+        Model = BankingMarketTrend;
+        break;
+      case 'fintech-news':
+        Model = FintechNews;
+        break;
+      default:
+        return res.status(400).json({ success: false, message: 'Invalid collection' });
+    }
+
+    // Get the item to verify it exists
+    const item = await Model.findById(id);
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Item not found' });
+    }
+
+    // Build the prompt
+    const prompt = `Tạo một graphic dạng logo–tóm tắt theo phong cách hiện đại với chi tiết như sau:
+
+Design hình ảnh minh họa cho nội dung: ${summary}
+
+Dạng hình: Hình vuông
+
+Phong cách: Màu sắc tươi sáng, dùng trong slide trình bày
+
+Yếu tố thể hiện: nội dung dành cho lĩnh vực ${category}
+
+Nội dung chữ: chỉ cần tiêu đề ngắn gọn`;
+
+    // Call Gemini 2.5 Flash Image for image generation
+    const apiKey = 'AIzaSyAfq-PTjr__ZiThTHLGRkLl_H6249xRso4';
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
+
+    const response = await axios.post(geminiUrl, {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }]
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Extract generated image from Gemini response
+    if (!response.data.candidates || response.data.candidates.length === 0) {
+      return res.status(500).json({ success: false, message: 'No image generated from Gemini' });
+    }
+
+    const candidate = response.data.candidates[0];
+    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      return res.status(500).json({ success: false, message: 'No image data in response' });
+    }
+
+    // Find the image part (inlineData)
+    const imagePart = candidate.content.parts.find(part => part.inlineData);
+    if (!imagePart || !imagePart.inlineData) {
+      return res.status(500).json({ success: false, message: 'No image data found in response' });
+    }
+
+    const base64Image = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+
+    // Update the item with the generated image
+    const updated = await Model.findByIdAndUpdate(
+      id,
+      { image: base64Image },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Image generated successfully',
+      data: updated
+    });
+
+  } catch (error) {
+    console.error('Error generating image:');
+    console.error('Error message:', error.message);
+    console.error('Error response data:', error.response?.data);
+    console.error('Error response JSON:', JSON.stringify(error.response?.data, null, 2));
+    console.error('Error status:', error.response?.status);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      details: error.response?.data,
+      statusCode: error.response?.status
+    });
   }
 });
 

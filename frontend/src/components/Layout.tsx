@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useJob } from '../contexts/JobContext'
 import '../App.css'
 
 function Layout() {
@@ -8,41 +7,16 @@ function Layout() {
   const [showUserMenu, setShowUserMenu] = useState(false)
 
   // Load appMode from localStorage, default to 'report' if not found
-  const [appMode, setAppMode] = useState<'report' | 'edit'>(() => {
+  const [appMode, setAppMode] = useState<'report' | 'edit' | 'manage'>(() => {
     const savedMode = localStorage.getItem('appMode')
-    return (savedMode === 'edit' || savedMode === 'report') ? savedMode : 'report'
+    return (savedMode === 'edit' || savedMode === 'report' || savedMode === 'manage') ? savedMode as 'report' | 'edit' | 'manage' : 'report'
   })
 
-  const [elapsedTime, setElapsedTime] = useState(0)
   const location = useLocation()
   const navigate = useNavigate()
-  const { currentJob, isProcessing } = useJob()
 
   const notificationRef = useRef<HTMLDivElement>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
-
-  // Update elapsed time for processing job
-  useEffect(() => {
-    if (!isProcessing || !currentJob) {
-      setElapsedTime(0)
-      return
-    }
-
-    const startTime = currentJob.createdAt.getTime()
-    const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000)
-      setElapsedTime(elapsed)
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [isProcessing, currentJob])
-
-  // Format elapsed time as MM:SS
-  const formatElapsedTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${String(secs).padStart(2, '0')}`
-  }
 
   // Save appMode to localStorage whenever it changes
   useEffect(() => {
@@ -61,6 +35,13 @@ function Layout() {
     } else {
       navigate('/select-news') // Navigate to News page (default for edit mode)
     }
+  }
+
+  // Switch to manage mode (history view)
+  const switchToManageMode = () => {
+    setAppMode('manage')
+    setShowUserMenu(false)
+    navigate('/settings') // Navigate to Settings/Management page
   }
 
   // Click outside to close dropdowns
@@ -90,28 +71,18 @@ function Layout() {
           {appMode === 'report' ? (
             // Report mode: Only show Home page
             <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>Báo cáo</Link>
+          ) : appMode === 'manage' ? (
+            // Manage mode: Only show Settings page
+            <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Quản lý</Link>
           ) : (
             // Edit mode: Show all other pages
             <>
               <Link to="/upload" className={`nav-link ${location.pathname === '/upload' ? 'active' : ''}`}>Tải lên file</Link>
               <Link to="/select-news" className={`nav-link ${location.pathname === '/select-news' ? 'active' : ''}`}>Tin tức</Link>
-              <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Quản lý</Link>
               <Link to="/analytics" className={`nav-link ${location.pathname === '/analytics' ? 'active' : ''}`}>Phân tích</Link>
             </>
           )}
         </div>
-
-        {/* Job Status Indicator */}
-        {isProcessing && currentJob && (
-          <div className="job-status-indicator">
-            <div className="job-status-content">
-              <div className="job-status-spinner"></div>
-              <span className="job-status-text">
-                Đang xử lý workflow... {formatElapsedTime(elapsedTime)}
-              </span>
-            </div>
-          </div>
-        )}
 
         {/* Right side - Icons */}
         <div className="navbar-right">
@@ -193,6 +164,12 @@ function Layout() {
                   </svg>
                   Quản lý tài khoản
                 </a>
+                <button onClick={switchToManageMode} className="dropdown-item" style={{width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer'}}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                  </svg>
+                  Xem lịch sử
+                </button>
                 <div className="dropdown-divider"></div>
                 <button onClick={toggleMode} className="dropdown-item" style={{width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer'}}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

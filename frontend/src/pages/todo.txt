@@ -1,5 +1,4 @@
-1. Adjust Page:
-Mặc định mở trang là hiển thị ngày nào?
+
 2. Homepage:
 (Advanced) Button Xuất báo cáo: Generate tự động slide (AI) - cho chọn giữa các mẫu slide
 (Advanced) 4. Upload File:
@@ -10,4 +9,10 @@ Hiện thực đơn giản các thông tin tài khoản
 ----select new
 xếp category theo mức độ ưu tiên
 ---------
-Trang HomePage và khâu cuối cùng hiển thị (Trang SelectNews)
+(Quan trọng nhất: Nhấn nút tóm tắt => gọi n8n => xong gọi callback web)
+(Cần làm đầu tiên) tiếp tục phần việc sắp xếp danh mục theo thứ tự ưu tiên = AI
+(vấn đề lỗi) khi bấm localhost:5173/ => hiển thị khong đúng trang mặc định
+(Tại trang Quản lý) không cho phép chỉnh sửa, chỉnh lại model data (trường hình ảnh), ngày
+mặc định là từ đầu tháng tới ngày hiện tại, đổi tên lại thành "Lịch sử tóm tắt"
+(Tại mode xem lịch sử) Thêm 1 trang "Lịch sử báo cáo"
+xử lý mấy phần trong mục problems
