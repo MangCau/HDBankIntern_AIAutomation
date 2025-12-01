@@ -170,9 +170,6 @@ function Adjust() {
     const [startDate, setStartDate] = useState(today)
     const [endDate, setEndDate] = useState(today)
   const [searchQuery, setSearchQuery] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editedSummaries, setEditedSummaries] = useState<Record<string, string>>({})
-  const [tempEditValue, setTempEditValue] = useState('')
   const [expandedItems, setExpandedItems] = useState<Set<string | number>>(new Set())
 
   // State for fetched data
@@ -234,7 +231,7 @@ function Adjust() {
         // Transform API data to match our interface
         const transformedProducts: ProductItem[] = productsData.data.map((item: any, index: number) => ({
           id: item._id,
-          image: getPlaceholderImage(index, 'product'), // Use placeholder until real images are added
+          image: item.image || getPlaceholderImage(index, 'product'),
           product_name: item.product_name,
           product_segment: item.product_segment || '',
           bank: Array.isArray(item.bank) ? item.bank : (item.bank ? [item.bank] : []),
@@ -247,7 +244,7 @@ function Adjust() {
 
         const transformedBanking: BankingNewsItem[] = bankingData.data.map((item: any, index: number) => ({
           id: item._id,
-          image: getPlaceholderImage(index, 'banking'), // Use placeholder until real images are added
+          image: item.image || getPlaceholderImage(index, 'banking'),
           title: item.title,
           topic_group: item.topic_group || '',
           bank: Array.isArray(item.bank_related) ? item.bank_related : (item.bank_related ? [item.bank_related] : []),
@@ -260,7 +257,7 @@ function Adjust() {
 
         const transformedFintech: FintechNewsItem[] = fintechData.data.map((item: any, index: number) => ({
           id: item._id,
-          image: getPlaceholderImage(index, 'fintech'), // Use placeholder until real images are added
+          image: item.image || getPlaceholderImage(index, 'fintech'),
           title: item.title,
           fintech_topic: item.fintech_topic || '',
           area_affected: Array.isArray(item.area_affected) ? item.area_affected.join(', ') : (item.area_affected || ''),
@@ -386,43 +383,7 @@ function Adjust() {
     })
   }
 
-  // Tạo unique key cho mỗi tin tức
-  const getUniqueKey = (category: Category, id: string | number): string => {
-    return `${category}-${id}`
-  }
-
-  // Xử lý chỉnh sửa summary
-  const handleEditSummary = (id: string | number, currentSummary: string) => {
-    const uniqueKey = getUniqueKey(selectedCategory, id)
-    setEditingId(uniqueKey)
-    setTempEditValue(editedSummaries[uniqueKey] || currentSummary)
-  }
-
-  const handleSaveSummary = (id: string | number) => {
-    const uniqueKey = getUniqueKey(selectedCategory, id)
-    const message = 'Bạn có chắc chắn muốn lưu thay đổi nội dung này không?'
-    if (window.confirm(message)) {
-      setEditedSummaries({
-        ...editedSummaries,
-        [uniqueKey]: tempEditValue
-      })
-      setEditingId(null)
-      setTempEditValue('')
-      alert('Đã lưu thay đổi thành công!')
-    }
-  }
-
-  const handleCancelEdit = () => {
-    setEditingId(null)
-    setTempEditValue('')
-  }
-
-  const getSummary = (item: NewsItem): string => {
-    const uniqueKey = getUniqueKey(selectedCategory, item.id)
-    return editedSummaries[uniqueKey] || item.summary
-  }
-
-    const toggleExpanded = (id: string | number) => {
+  const toggleExpanded = (id: string | number) => {
     const newSet = new Set<string | number>(expandedItems)
     if (newSet.has(id)) {
       newSet.delete(id)
@@ -604,51 +565,14 @@ function Adjust() {
             </div>
 
             <div className="news-list">
-              {getFilteredData().map((item) => {
-                const uniqueKey = getUniqueKey(selectedCategory, item.id)
-                return (
+              {getFilteredData().map((item) => (
                   <article key={item.id} className="news-card">
               <div className="news-image">
                 <img src={item.image} alt={getTitle(item)} />
               </div>
               <div className="news-content">
                 <h2 className="news-title">{getTitle(item)}</h2>
-                {editingId === uniqueKey ? (
-                  <div className="edit-summary-container">
-                    <textarea
-                      className="edit-summary-textarea"
-                      value={tempEditValue}
-                      onChange={(e) => setTempEditValue(e.target.value)}
-                      rows={4}
-                    />
-                    <div className="edit-summary-buttons">
-                      <button className="save-summary-btn" onClick={() => handleSaveSummary(item.id)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        Lưu
-                      </button>
-                      <button className="cancel-summary-btn" onClick={handleCancelEdit}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                        Hủy
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="summary-with-edit">
-                    <p className="news-summary">{getSummary(item)}</p>
-                    <button className="edit-summary-btn" onClick={() => handleEditSummary(item.id, item.summary)}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                      Chỉnh sửa
-                    </button>
-                  </div>
-                )}
+                <p className="news-summary">{item.summary}</p>
 
                 {/* Detailed information when expanded */}
                 {expandedItems.has(item.id) && (
@@ -725,19 +649,39 @@ function Adjust() {
                       </>
                     )}
                   </button>
-                  <a href={item.source_url} target="_blank" rel="noopener noreferrer" className="source-link">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                      <polyline points="15 3 21 3 21 9" />
-                      <line x1="10" y1="14" x2="21" y2="3" />
-                    </svg>
-                    <span>Xem nguồn</span>
-                  </a>
+                  {item.source_url && (
+                    <a
+                      href={item.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="meta-item"
+                      style={{
+                        color: '#F00020',
+                        textDecoration: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = '#c00018'
+                        e.currentTarget.style.textDecoration = 'underline'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = '#F00020'
+                        e.currentTarget.style.textDecoration = 'none'
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                      </svg>
+                      <span>Xem nguồn</span>
+                    </a>
+                  )}
                 </div>
               </div>
                   </article>
-                )
-              })}
+              ))}
 
               {getFilteredData().length === 0 && (
                 <div className='no-results'>

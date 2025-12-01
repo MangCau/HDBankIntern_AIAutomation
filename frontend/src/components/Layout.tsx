@@ -23,6 +23,13 @@ function Layout() {
     localStorage.setItem('appMode', appMode)
   }, [appMode])
 
+  // Force report mode when on homepage
+  useEffect(() => {
+    if (location.pathname === '/') {
+      setAppMode('report')
+    }
+  }, [location.pathname])
+
   // Toggle between report and edit mode
   const toggleMode = () => {
     const newMode = appMode === 'report' ? 'edit' : 'report'

@@ -102,7 +102,8 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
         'Tin tức ngành Fintech': new Set()
     })
     const [editingId, setEditingId] = useState<string | null>(null)
-    const [tempEditValue, setTempEditValue] = useState('')
+    const [tempTitleValue, setTempTitleValue] = useState('')
+    const [tempSummaryValue, setTempSummaryValue] = useState('')
     const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null)
 
     // Real data from API
@@ -110,6 +111,9 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
     const [marketTrends, setMarketTrends] = useState<BankingTrendData[]>([])
     const [fintechNews, setFintechNews] = useState<FintechNewsData[]>([])
     const [loading, setLoading] = useState(true)
+
+    // Track pending selection changes (not yet saved to database)
+    const [pendingSelectionChanges, setPendingSelectionChanges] = useState<Map<string, { collection: string, selected: boolean }>>(new Map())
 
     // Fetch selected items from API
     useEffect(() => {
@@ -172,25 +176,209 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
         })
     }
 
-    const handleEditSummary = (uniqueKey: string, currentSummary: string) => {
+    const handleEdit = (uniqueKey: string, item: any) => {
         setEditingId(uniqueKey)
-        setTempEditValue(currentSummary)
+        setTempTitleValue(getTitle(item))
+        setTempSummaryValue(item.summary || item.description || '')
     }
 
-    const handleSaveSummary = () => {
-        // TODO: Save to backend
-        alert('Lưu tóm tắt: ' + tempEditValue.substring(0, 50) + '...')
-        setEditingId(null)
+    const handleSave = async (categoryTitle: string, itemId: string, item: any) => {
+        try {
+            let collection = ''
+            let titleField = ''
+            let summaryField = ''
+
+            if (categoryTitle === 'Sản phẩm & Dịch vụ mới') {
+                collection = 'new-products'
+                titleField = 'product_name'
+                summaryField = 'description'
+            } else if (categoryTitle === 'Tin tức ngành Ngân hàng') {
+                collection = 'market-trends'
+                titleField = 'title'
+                summaryField = 'summary'
+            } else if (categoryTitle === 'Tin tức ngành Fintech') {
+                collection = 'fintech-news'
+                titleField = 'title'
+                summaryField = 'summary'
+            }
+
+            // Update title if changed
+            const originalTitle = getTitle(item)
+            const originalSummary = item.summary || item.description || ''
+
+            const updates = []
+            const changedFields = []
+
+            if (tempTitleValue !== originalTitle) {
+                changedFields.push('tiêu đề')
+                updates.push(
+                    fetch(apiEndpoint(`api/data/update-field/${collection}/${itemId}`), {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            field: titleField,
+                            value: tempTitleValue
+                        })
+                    })
+                )
+            }
+
+            if (tempSummaryValue !== originalSummary) {
+                changedFields.push('nội dung')
+                updates.push(
+                    fetch(apiEndpoint(`api/data/update-field/${collection}/${itemId}`), {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            field: summaryField,
+                            value: tempSummaryValue
+                        })
+                    })
+                )
+            }
+
+            if (updates.length === 0) {
+                alert('Không có thay đổi nào!')
+                setEditingId(null)
+                return
+            }
+
+            // Confirmation dialog
+            const confirmMessage = `Bạn có chắc chắn muốn thay đổi ${changedFields.join(' và ')} không?`
+            if (!confirm(confirmMessage)) {
+                return
+            }
+
+            const results = await Promise.all(updates)
+            const allSuccess = results.every(async (res) => {
+                const data = await res.json()
+                return data.success
+            })
+
+            if (allSuccess) {
+                // Update local state
+                if (collection === 'new-products') {
+                    setNewProducts(prev => prev.map(i => i._id === itemId ? {
+                        ...i,
+                        product_name: tempTitleValue,
+                        description: tempSummaryValue
+                    } : i))
+                } else if (collection === 'market-trends') {
+                    setMarketTrends(prev => prev.map(i => i._id === itemId ? {
+                        ...i,
+                        title: tempTitleValue,
+                        summary: tempSummaryValue
+                    } : i))
+                } else if (collection === 'fintech-news') {
+                    setFintechNews(prev => prev.map(i => i._id === itemId ? {
+                        ...i,
+                        title: tempTitleValue,
+                        summary: tempSummaryValue
+                    } : i))
+                }
+                alert('Đã cập nhật thành công!')
+                setEditingId(null)
+                setTempTitleValue('')
+                setTempSummaryValue('')
+            } else {
+                alert('Có lỗi xảy ra khi cập nhật!')
+            }
+        } catch (error) {
+            console.error('Error updating:', error)
+            alert('Có lỗi xảy ra!')
+        }
     }
 
     const handleCancelEdit = () => {
         setEditingId(null)
-        setTempEditValue('')
+        setTempTitleValue('')
+        setTempSummaryValue('')
+    }
+
+    // Toggle selection status (not saved to DB yet)
+    const handleToggleSelection = (categoryTitle: string, itemId: string, currentSelected: boolean) => {
+        let collection = ''
+        if (categoryTitle === 'Sản phẩm & Dịch vụ mới') collection = 'new-products'
+        else if (categoryTitle === 'Tin tức ngành Ngân hàng') collection = 'market-trends'
+        else if (categoryTitle === 'Tin tức ngành Fintech') collection = 'fintech-news'
+
+        // Update local state immediately
+        if (collection === 'new-products') {
+            setNewProducts(prev => prev.map(i => i._id === itemId ? { ...i, selected: !currentSelected } : i))
+        } else if (collection === 'market-trends') {
+            setMarketTrends(prev => prev.map(i => i._id === itemId ? { ...i, selected: !currentSelected } : i))
+        } else if (collection === 'fintech-news') {
+            setFintechNews(prev => prev.map(i => i._id === itemId ? { ...i, selected: !currentSelected } : i))
+        }
+
+        // Track the change for later batch update
+        setPendingSelectionChanges(prev => {
+            const newMap = new Map(prev)
+            newMap.set(itemId, { collection, selected: !currentSelected })
+            return newMap
+        })
+    }
+
+    // Save all pending selection changes to database
+    const handleSaveSelectionChanges = async () => {
+        if (pendingSelectionChanges.size === 0) {
+            alert('Không có thay đổi nào!')
+            return
+        }
+
+        if (!confirm(`Bạn có chắc chắn muốn cập nhật ${pendingSelectionChanges.size} thay đổi?`)) {
+            return
+        }
+
+        try {
+            // Group changes by collection
+            const changesByCollection: Record<string, Array<{ id: string, selected: boolean }>> = {}
+
+            pendingSelectionChanges.forEach((value, id) => {
+                if (!changesByCollection[value.collection]) {
+                    changesByCollection[value.collection] = []
+                }
+                changesByCollection[value.collection].push({ id, selected: value.selected })
+            })
+
+            // Send updates for each collection
+            const updatePromises = Object.entries(changesByCollection).map(([collection, changes]) => {
+                return Promise.all(changes.map(({ id, selected }) =>
+                    fetch(apiEndpoint(`api/data/update-field/${collection}/${id}`), {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            field: 'selected',
+                            value: selected
+                        })
+                    })
+                ))
+            })
+
+            await Promise.all(updatePromises)
+
+            alert('Đã cập nhật thành công!')
+            setPendingSelectionChanges(new Map())
+        } catch (error) {
+            console.error('Error updating selections:', error)
+            alert('Có lỗi xảy ra khi cập nhật!')
+        }
     }
 
     const formatDate = (dateString: string): string => {
         if (!dateString) return 'N/A'
+
+        // Check if already in dd/mm/yyyy format
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+            return dateString
+        }
+
+        // Try to parse as ISO date
         const date = new Date(dateString)
+        if (isNaN(date.getTime())) {
+            return 'N/A'
+        }
+
         return date.toLocaleDateString('vi-VN', {
             day: '2-digit',
             month: '2-digit',
@@ -532,15 +720,15 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6c757d" strokeWidth="2">
+                                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6c757d" strokeWidth="2" style={{ display: 'block', margin: '0 auto' }}>
                                                                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                                                                 <circle cx="8.5" cy="8.5" r="1.5"/>
                                                                 <polyline points="21 15 16 10 5 21"/>
                                                             </svg>
-                                                            <p style={{ margin: '12px 0 4px 0', fontSize: '14px', color: '#6c757d', fontWeight: '500' }}>
+                                                            <p style={{ margin: '12px 0 4px 0', fontSize: '14px', color: '#6c757d', fontWeight: '500', textAlign: 'center' }}>
                                                                 Kéo thả ảnh vào đây
                                                             </p>
-                                                            <p style={{ margin: 0, fontSize: '12px', color: '#adb5bd' }}>
+                                                            <p style={{ margin: 0, fontSize: '12px', color: '#adb5bd', textAlign: 'center' }}>
                                                                 hoặc click để chọn file
                                                             </p>
                                                         </>
@@ -593,23 +781,86 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                                         )}
                                     </div>
                                     <div className="news-content">
-                                        <h2 className="news-title">{getTitle(item)}</h2>
                                         {editingId === uniqueKey ? (
-                                            <div className="edit-summary-container">
-                                                <textarea
-                                                    className="edit-summary-textarea"
-                                                    value={tempEditValue}
-                                                    onChange={(e) => setTempEditValue(e.target.value)}
-                                                    rows={4}
-                                                />
-                                                <div className="edit-summary-buttons">
-                                                    <button className="save-summary-btn" onClick={handleSaveSummary}>
+                                            <div className="edit-container" style={{ marginBottom: '16px' }}>
+                                                <div style={{ marginBottom: '12px' }}>
+                                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                                                        Tiêu đề
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        className="edit-title-input"
+                                                        value={tempTitleValue}
+                                                        onChange={(e) => setTempTitleValue(e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '8px 12px',
+                                                            fontSize: '16px',
+                                                            fontWeight: '600',
+                                                            border: '2px solid #F00020',
+                                                            borderRadius: '6px'
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div style={{ marginBottom: '12px' }}>
+                                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                                                        Nội dung
+                                                    </label>
+                                                    <textarea
+                                                        className="edit-summary-textarea"
+                                                        value={tempSummaryValue}
+                                                        onChange={(e) => setTempSummaryValue(e.target.value)}
+                                                        rows={4}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '8px 12px',
+                                                            fontSize: '14px',
+                                                            border: '2px solid #F00020',
+                                                            borderRadius: '6px',
+                                                            resize: 'vertical'
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="edit-buttons" style={{ display: 'flex', gap: '8px' }}>
+                                                    <button
+                                                        className="save-btn"
+                                                        onClick={() => handleSave(categoryTitle, item._id, item)}
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            backgroundColor: '#F00020',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            fontSize: '14px',
+                                                            fontWeight: '600'
+                                                        }}
+                                                    >
                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                             <polyline points="20 6 9 17 4 12" />
                                                         </svg>
                                                         Lưu
                                                     </button>
-                                                    <button className="cancel-summary-btn" onClick={handleCancelEdit}>
+                                                    <button
+                                                        className="cancel-btn"
+                                                        onClick={handleCancelEdit}
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            backgroundColor: '#6c757d',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            fontSize: '14px',
+                                                            fontWeight: '600'
+                                                        }}
+                                                    >
                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                             <line x1="18" y1="6" x2="6" y2="18" />
                                                             <line x1="6" y1="6" x2="18" y2="18" />
@@ -619,16 +870,69 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="summary-with-edit">
+                                            <>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                                                    <h2 className="news-title" style={{ flex: 1, margin: 0 }}>{getTitle(item)}</h2>
+                                                    <button
+                                                        onClick={() => handleToggleSelection(categoryTitle, item._id, item.selected)}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            backgroundColor: item.selected ? '#28a745' : '#dc3545',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            fontSize: '12px',
+                                                            fontWeight: '600',
+                                                            transition: 'all 0.2s ease'
+                                                        }}
+                                                    >
+                                                        {item.selected ? (
+                                                            <>
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                    <polyline points="20 6 9 17 4 12" />
+                                                                </svg>
+                                                                <span>Đã chọn</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                                                </svg>
+                                                                <span>Bỏ chọn</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        className="edit-btn"
+                                                        onClick={() => handleEdit(uniqueKey, item)}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            backgroundColor: 'transparent',
+                                                            color: '#F00020',
+                                                            border: '1px solid #F00020',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            fontSize: '12px',
+                                                            fontWeight: '600'
+                                                        }}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                                        </svg>
+                                                        Sửa
+                                                    </button>
+                                                </div>
                                                 <p className="news-summary">{item.summary || item.description || 'Chưa có tóm tắt'}</p>
-                                                <button className="edit-summary-btn" onClick={() => handleEditSummary(uniqueKey, item.summary || item.description || '')}>
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                                    </svg>
-                                                    Chỉnh sửa
-                                                </button>
-                                            </div>
+                                            </>
                                         )}
 
                                         {isExpanded && (
@@ -696,6 +1000,35 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                                                 </svg>
                                                 <span>{formatDate(getDate(item))}</span>
                                             </div>
+                                            {item.source_url && (
+                                                <a
+                                                    href={item.source_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="meta-item"
+                                                    style={{
+                                                        color: '#F5B800',
+                                                        textDecoration: 'none',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s ease'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.color = '#F5B800'
+                                                        e.currentTarget.style.textDecoration = 'underline'
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.color = '#F5B800'
+                                                        e.currentTarget.style.textDecoration = 'none'
+                                                    }}
+                                                >
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                                        <polyline points="15 3 21 3 21 9"></polyline>
+                                                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                                                    </svg>
+                                                    <span>Xem nguồn</span>
+                                                </a>
+                                            )}
                                             <button onClick={() => toggleExpanded(categoryTitle, item._id)} className="source-link detail-toggle-btn">
                                                 {isExpanded ? (
                                                     <>
@@ -730,12 +1063,29 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                 paddingTop: '32px',
                 borderTop: '2px solid #e9ecef',
                 display: 'flex',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                gap: '16px',
+                alignItems: 'center'
             }}>
+                {pendingSelectionChanges.size > 0 && (
+                    <div style={{
+                        padding: '12px 20px',
+                        backgroundColor: '#fff3cd',
+                        color: '#856404',
+                        border: '1px solid #ffeeba',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: '600'
+                    }}>
+                        {pendingSelectionChanges.size} thay đổi chưa lưu
+                    </div>
+                )}
                 <button
-                    onClick={() => {
+                    onClick={async () => {
+                        // Save pending changes first
+                        await handleSaveSelectionChanges()
                         // Navigate to Manage page (ViewNews)
-                        window.location.href = '/view-news'
+                        window.location.href = '/'
                     }}
                     style={{
                         padding: '16px 40px',
@@ -767,7 +1117,7 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                         <path d="M9 11l3 3L22 4" />
                         <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                     </svg>
-                    Xem chi tiết tại trang Quản lý
+                    Xác nhận báo cáo
                 </button>
             </div>
         </div>
@@ -950,7 +1300,13 @@ function SelectNews() {
             }
 
             try {
-                const apiKey = 'AIzaSyAfq-PTjr__ZiThTHLGRkLl_H6249xRso4'
+                const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+                if (!apiKey) {
+                    console.warn('VITE_GEMINI_API_KEY not found, using original order')
+                    setSortedCategories(availableCategories)
+                    return
+                }
+
                 const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`
 
                 const prompt = `Role: Bạn là một Chuyên gia Phân tích Chiến lược Ngân hàng & Fintech.
@@ -1012,10 +1368,11 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
 
     // Auto-select first category when date changes
     useMemo(() => {
-        if (availableCategories.length > 0 && !availableCategories.includes(selectedCategory) && !isPriorityView) {
-            setSelectedCategory(availableCategories[0] as string)
+        const categoriesToUse = sortedCategories.length > 0 ? sortedCategories : availableCategories
+        if (categoriesToUse.length > 0 && !categoriesToUse.includes(selectedCategory) && !isPriorityView) {
+            setSelectedCategory(categoriesToUse[0] as string)
         }
-    }, [availableCategories, selectedCategory, isPriorityView])
+    }, [sortedCategories, availableCategories, selectedCategory, isPriorityView])
 
     // Get news filtered by both date range and category, sorted by selected status
     const filteredNews = useMemo(() => {
@@ -1654,7 +2011,7 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                             <div style={{ borderTop: '1px solid #e2e8f0', margin: '8px -12px 8px -12px' }}></div>
 
                             {/* Category list */}
-                            {availableCategories.map((category) => {
+                            {(sortedCategories.length > 0 ? sortedCategories : availableCategories).map((category) => {
                                 // const count = newsInDateRange.filter((item: NewsItem) => item.category === category).length
                                 const isActive = selectedCategory === category && !isPriorityView
                                 return (

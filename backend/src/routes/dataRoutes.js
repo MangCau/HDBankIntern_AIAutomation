@@ -178,6 +178,62 @@ router.patch('/update-image/:collection/:id', checkDbConnection, async (req, res
   }
 });
 
+// Update a specific field for an item in any of the 3 tables
+router.patch('/update-field/:collection/:id', checkDbConnection, async (req, res) => {
+  try {
+    const { collection, id } = req.params;
+    const { field, value } = req.body;
+
+    // Validate field and value are provided
+    if (!field || value === undefined || value === null) {
+      return res.status(400).json({ success: false, message: 'Field and value are required' });
+    }
+
+    // Determine which model to use
+    let Model;
+    let allowedFields;
+    switch (collection) {
+      case 'new-products':
+        Model = NewProductService;
+        allowedFields = ['product_name', 'description', 'selected'];
+        break;
+      case 'market-trends':
+        Model = BankingMarketTrend;
+        allowedFields = ['title', 'summary', 'selected'];
+        break;
+      case 'fintech-news':
+        Model = FintechNews;
+        allowedFields = ['title', 'summary', 'selected'];
+        break;
+      default:
+        return res.status(400).json({ success: false, message: 'Invalid collection' });
+    }
+
+    // Validate field is allowed for this collection
+    if (!allowedFields.includes(field)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid field. Allowed fields for ${collection}: ${allowedFields.join(', ')}`
+      });
+    }
+
+    // Update the field
+    const updated = await Model.findByIdAndUpdate(
+      id,
+      { [field]: value },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Item not found' });
+    }
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Generate image using Imagen 3 API
 router.post('/generate-image/:collection/:id', checkDbConnection, async (req, res) => {
   try {
@@ -220,8 +276,10 @@ Yếu tố thể hiện: nội dung dành cho lĩnh vực ${category}
 Nội dung chữ: chỉ cần tiêu đề ngắn gọn`;
 
     // Call Gemini 2.5 Flash Image for image generation
-    require('dotenv').config();
     const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ success: false, message: 'GEMINI_API_KEY not configured' });
+    }
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
 
     const response = await axios.post(geminiUrl, {
