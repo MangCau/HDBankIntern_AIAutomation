@@ -95,7 +95,7 @@ interface FintechNewsData {
 }
 
 // Summary Content Component with real data from API
-function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) {
+function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNewsCount: number, onResetSelection: () => void }) {
     const [expandedItems, setExpandedItems] = useState<Record<string, Set<string>>>({
         'Sản phẩm & Dịch vụ mới': new Set(),
         'Tin tức ngành Ngân hàng': new Set(),
@@ -362,6 +362,39 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
         } catch (error) {
             console.error('Error updating selections:', error)
             alert('Có lỗi xảy ra khi cập nhật!')
+        }
+    }
+
+    // Reset all selected items to false in all 3 collections
+    const handleResetAllSelections = async () => {
+        try {
+            const allItems = [
+                ...newProducts.map(item => ({ id: item._id, collection: 'new-products' })),
+                ...marketTrends.map(item => ({ id: item._id, collection: 'market-trends' })),
+                ...fintechNews.map(item => ({ id: item._id, collection: 'fintech-news' }))
+            ]
+
+            // Update all items to selected = false
+            const updatePromises = allItems.map(({ id, collection }) =>
+                fetch(apiEndpoint(`api/data/update-field/${collection}/${id}`), {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        field: 'selected',
+                        value: false
+                    })
+                })
+            )
+
+            await Promise.all(updatePromises)
+
+            // Clear pending changes
+            setPendingSelectionChanges(new Map())
+
+            console.log('All selections reset successfully')
+        } catch (error) {
+            console.error('Error resetting selections:', error)
+            alert('Có lỗi xảy ra khi reset!')
         }
     }
 
@@ -1000,6 +1033,26 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                                                 </svg>
                                                 <span>{formatDate(getDate(item))}</span>
                                             </div>
+                                            
+                                            <button onClick={() => toggleExpanded(categoryTitle, item._id)} className="source-link detail-toggle-btn">
+                                                {isExpanded ? (
+                                                    <>
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <polyline points="18 15 12 9 6 15" />
+                                                        </svg>
+                                                        <span>Thu gọn</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <circle cx="12" cy="12" r="1" />
+                                                            <circle cx="12" cy="5" r="1" />
+                                                            <circle cx="12" cy="19" r="1" />
+                                                        </svg>
+                                                        <span>Xem chi tiết</span>
+                                                    </>
+                                                )}
+                                            </button>
                                             {item.source_url && (
                                                 <a
                                                     href={item.source_url}
@@ -1029,25 +1082,6 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                                                     <span>Xem nguồn</span>
                                                 </a>
                                             )}
-                                            <button onClick={() => toggleExpanded(categoryTitle, item._id)} className="source-link detail-toggle-btn">
-                                                {isExpanded ? (
-                                                    <>
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <polyline points="18 15 12 9 6 15" />
-                                                        </svg>
-                                                        <span>Thu gọn</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <circle cx="12" cy="12" r="1" />
-                                                            <circle cx="12" cy="5" r="1" />
-                                                            <circle cx="12" cy="19" r="1" />
-                                                        </svg>
-                                                        <span>Xem chi tiết</span>
-                                                    </>
-                                                )}
-                                            </button>
                                         </div>
                                     </div>
                                 </article>
@@ -1080,45 +1114,88 @@ function SummaryContent({ confirmedNewsCount }: { confirmedNewsCount: number }) 
                         {pendingSelectionChanges.size} thay đổi chưa lưu
                     </div>
                 )}
-                <button
-                    onClick={async () => {
-                        // Save pending changes first
-                        await handleSaveSelectionChanges()
-                        // Navigate to Manage page (ViewNews)
-                        window.location.href = '/'
-                    }}
-                    style={{
-                        padding: '16px 40px',
-                        backgroundColor: '#F00020',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease',
-                        boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#c00018'
-                        e.currentTarget.style.transform = 'translateY(-2px)'
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#F00020'
-                        e.currentTarget.style.transform = 'translateY(0)'
-                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
-                    }}
-                >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M9 11l3 3L22 4" />
-                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                    </svg>
-                    Xác nhận báo cáo
-                </button>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                    <button
+                        onClick={async () => {
+                            if (window.confirm('Bạn có chắc muốn chọn lại? Tất cả tin tức đã chọn sẽ bị bỏ chọn.')) {
+                                // Reset all selected = false in database
+                                await handleResetAllSelections()
+                                // Call parent's reset function
+                                onResetSelection()
+                            }
+                        }}
+                        style={{
+                            padding: '16px 40px',
+                            backgroundColor: '#6c757d',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease',
+                            boxShadow: '0 2px 8px rgba(108, 117, 125, 0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#5a6268'
+                            e.currentTarget.style.transform = 'translateY(-2px)'
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(108, 117, 125, 0.4)'
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#6c757d'
+                            e.currentTarget.style.transform = 'translateY(0)'
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.3)'
+                        }}
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="1 4 1 10 7 10" />
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                        </svg>
+                        Chọn lại
+                    </button>
+                    <button
+                        onClick={async () => {
+                            // Save pending changes first
+                            await handleSaveSelectionChanges()
+                            // Navigate to Homepage page (Homepage)
+                            window.location.href = '/'
+                        }}
+                        style={{
+                            padding: '16px 40px',
+                            backgroundColor: '#F00020',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease',
+                            boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#c00018'
+                            e.currentTarget.style.transform = 'translateY(-2px)'
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#F00020'
+                            e.currentTarget.style.transform = 'translateY(0)'
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
+                        }}
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M9 11l3 3L22 4" />
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                        </svg>
+                        Xác nhận báo cáo
+                    </button>
+                </div>
             </div>
         </div>
     )
@@ -1142,9 +1219,33 @@ function SelectNews() {
     const [tempPriorities, setTempPriorities] = useState<Record<string, boolean>>({})
     const [confirmedPriorities, setConfirmedPriorities] = useState<Record<string, boolean>>({})
 
-    // Workflow step state
-    const [currentStep, setCurrentStep] = useState<'selection' | 'next' | 'summary'>('selection')
-    const [confirmedNews, setConfirmedNews] = useState<NewsItem[]>([])
+    // n8n workflow state with localStorage persistence
+    const [isProcessing, setIsProcessing] = useState(() => {
+        const saved = localStorage.getItem('selectNews_isProcessing')
+        return saved === 'true'
+    })
+    const [jobId, setJobId] = useState<string | null>(() => {
+        return localStorage.getItem('selectNews_jobId')
+    })
+    const [workflowCompleted, setWorkflowCompleted] = useState(() => {
+        const saved = localStorage.getItem('selectNews_workflowCompleted')
+        return saved === 'true'
+    })
+
+    // Workflow step state with localStorage persistence
+    // IMPORTANT: If workflowCompleted=true, always start at 'summary' step
+    const [currentStep, setCurrentStep] = useState<'selection' | 'next' | 'summary'>(() => {
+        const workflowDone = localStorage.getItem('selectNews_workflowCompleted') === 'true'
+        if (workflowDone) {
+            return 'summary'
+        }
+        const saved = localStorage.getItem('selectNews_currentStep')
+        return (saved as 'selection' | 'next' | 'summary') || 'selection'
+    })
+    const [confirmedNews, setConfirmedNews] = useState<NewsItem[]>(() => {
+        const saved = localStorage.getItem('selectNews_confirmedNews')
+        return saved ? JSON.parse(saved) : []
+    })
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1)
@@ -1229,6 +1330,30 @@ function SelectNews() {
         fetchData()
     }, [])
 
+    // Persist workflow state to localStorage
+    useEffect(() => {
+        localStorage.setItem('selectNews_currentStep', currentStep)
+        localStorage.setItem('selectNews_confirmedNews', JSON.stringify(confirmedNews))
+        localStorage.setItem('selectNews_isProcessing', isProcessing.toString())
+        localStorage.setItem('selectNews_jobId', jobId || '')
+        localStorage.setItem('selectNews_workflowCompleted', workflowCompleted.toString())
+    }, [currentStep, confirmedNews, isProcessing, jobId, workflowCompleted])
+
+    // Resume polling if page was refreshed during processing
+    useEffect(() => {
+        if (isProcessing && jobId && currentStep === 'next') {
+            console.log('Resuming polling for job:', jobId)
+            startPolling(jobId)
+        }
+    }, []) // Run only once on mount
+
+    // Auto-navigate to summary when workflow completes
+    useEffect(() => {
+        if (workflowCompleted) {
+            console.log('Workflow completed - locking to summary step')
+            setCurrentStep('summary')
+        }
+    }, [workflowCompleted])
 
     // Convert ISO date (YYYY-MM-DD) to Vietnamese format (DD/MM/YYYY)
     const convertISOToVN = (isoDate: string): string => {
@@ -1365,6 +1490,113 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
 
         sortCategories()
     }, [availableCategories])
+
+    // Trigger n8n workflow
+    const handleTriggerWorkflow = async () => {
+        try {
+            setIsProcessing(true)
+            setWorkflowCompleted(false)
+
+            const response = await fetch(apiEndpoint('api/n8n/trigger-workflow'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    startDate: startDateISO,
+                    endDate: endDateISO
+                })
+            })
+
+            const data = await response.json()
+            setJobId(data.jobId)
+
+            // Start polling for job status
+            startPolling(data.jobId)
+        } catch (error) {
+            console.error('Error triggering workflow:', error)
+            alert('Có lỗi xảy ra khi khởi chạy workflow!')
+            setIsProcessing(false)
+        }
+    }
+
+    // Poll job status
+    const startPolling = (jobId: string) => {
+        const intervalId = setInterval(async () => {
+            try {
+                const response = await fetch(apiEndpoint(`api/n8n/job/${jobId}`))
+                const job = await response.json()
+
+                if (job.status === 'completed') {
+                    clearInterval(intervalId)
+                    setIsProcessing(false)
+                    setWorkflowCompleted(true)
+                } else if (job.status === 'failed') {
+                    clearInterval(intervalId)
+                    setIsProcessing(false)
+                    alert('Workflow thất bại! Vui lòng thử lại.')
+                }
+            } catch (error) {
+                console.error('Error polling job status:', error)
+            }
+        }, 3000) // Poll every 3 seconds
+
+        // Store interval ID to clean up later
+        return intervalId
+    }
+
+    // Reset to selection step (only reset state, not database)
+    const handleResetToSelection = () => {
+        setCurrentStep('selection')
+        setIsProcessing(false)
+        setWorkflowCompleted(false)
+        setJobId(null)
+        setConfirmedNews([])
+        setConfirmedPriorities({})
+        setTempPriorities({})
+
+        // Clear localStorage
+        localStorage.removeItem('selectNews_currentStep')
+        localStorage.removeItem('selectNews_confirmedNews')
+        localStorage.removeItem('selectNews_isProcessing')
+        localStorage.removeItem('selectNews_jobId')
+        localStorage.removeItem('selectNews_workflowCompleted')
+    }
+
+    // Reset with database cleanup (set all selected = false)
+    const handleResetWithDatabaseCleanup = async () => {
+        if (window.confirm('Bạn có chắc muốn chọn lại? Tất cả tin tức đã chọn sẽ bị bỏ chọn.')) {
+            try {
+                // Get all selected items from API
+                const response = await fetch(apiEndpoint('api/data/summary-selected'))
+                const result = await response.json()
+
+                if (result.success) {
+                    const allItems = [
+                        ...result.data.newProducts.map((item: any) => ({ id: item._id, collection: 'new-products' })),
+                        ...result.data.marketTrends.map((item: any) => ({ id: item._id, collection: 'market-trends' })),
+                        ...result.data.fintechNews.map((item: any) => ({ id: item._id, collection: 'fintech-news' }))
+                    ]
+
+                    // Update all items to selected = false
+                    await Promise.all(allItems.map(({ id, collection }) =>
+                        fetch(apiEndpoint(`api/data/update-field/${collection}/${id}`), {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                field: 'selected',
+                                value: false
+                            })
+                        })
+                    ))
+                }
+
+                // Reset state and go back to selection
+                handleResetToSelection()
+            } catch (error) {
+                console.error('Error resetting selections:', error)
+                alert('Có lỗi xảy ra khi reset!')
+            }
+        }
+    }
 
     // Auto-select first category when date changes
     useMemo(() => {
@@ -1583,7 +1815,10 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                     </div>
 
                     {/* Content area for summary step - Mocked data theo 3 categories */}
-                    <SummaryContent confirmedNewsCount={confirmedNews.length} />
+                    <SummaryContent
+                        confirmedNewsCount={confirmedNews.length}
+                        onResetSelection={handleResetToSelection}
+                    />
                 </div>
             </div>
         )
@@ -1678,38 +1913,132 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                             <div style={{
                                 marginTop: '32px',
                                 display: 'flex',
-                                justifyContent: 'center'
+                                justifyContent: 'center',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '16px'
                             }}>
-                                <button
-                                    onClick={() => setCurrentStep('summary')}
-                                    style={{
-                                        padding: '14px 40px',
-                                        backgroundColor: '#F00020',
-                                        color: '#ffffff',
-                                        border: 'none',
+                                {!isProcessing && !workflowCompleted && (
+                                    <button
+                                        onClick={handleTriggerWorkflow}
+                                        style={{
+                                            padding: '14px 40px',
+                                            backgroundColor: '#F00020',
+                                            color: '#ffffff',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            fontSize: '16px',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease',
+                                            boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#c00018'
+                                            e.currentTarget.style.transform = 'translateY(-2px)'
+                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#F00020'
+                                            e.currentTarget.style.transform = 'translateY(0)'
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
+                                        }}
+                                    >
+                                        📊 Tóm tắt
+                                    </button>
+                                )}
+
+                                {isProcessing && (
+                                    <div style={{
+                                        padding: '20px',
+                                        backgroundColor: '#fff3cd',
+                                        border: '2px solid #ffc107',
                                         borderRadius: '8px',
-                                        fontSize: '16px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.3s ease',
-                                        boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = '#c00018'
-                                        e.currentTarget.style.transform = 'translateY(-2px)'
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = '#F00020'
-                                        e.currentTarget.style.transform = 'translateY(0)'
-                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
-                                    }}
-                                >
-                                    📊 Tóm tắt
-                                </button>
+                                        textAlign: 'center',
+                                        maxWidth: '400px'
+                                    }}>
+                                        <div style={{ marginBottom: '12px', fontSize: '32px' }}>⏳</div>
+                                        <div style={{ fontSize: '16px', fontWeight: '600', color: '#856404', marginBottom: '8px' }}>
+                                            Đang xử lý...
+                                        </div>
+                                        <div style={{ fontSize: '14px', color: '#856404' }}>
+                                            Hệ thống đang tóm tắt tin tức. Vui lòng chờ trong giây lát.
+                                        </div>
+                                        {jobId && (
+                                            <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '8px' }}>
+                                                Job ID: {jobId}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {workflowCompleted && (
+                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                        <button
+                                            onClick={() => setCurrentStep('summary')}
+                                            style={{
+                                                padding: '14px 40px',
+                                                backgroundColor: '#28a745',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontSize: '16px',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.3s ease',
+                                                boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#218838'
+                                                e.currentTarget.style.transform = 'translateY(-2px)'
+                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.4)'
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#28a745'
+                                                e.currentTarget.style.transform = 'translateY(0)'
+                                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(40, 167, 69, 0.3)'
+                                            }}
+                                        >
+                                            ✅ Xem tóm tắt
+                                        </button>
+                                        <button
+                                            onClick={handleResetWithDatabaseCleanup}
+                                            style={{
+                                                padding: '14px 40px',
+                                                backgroundColor: '#6c757d',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontSize: '16px',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.3s ease',
+                                                boxShadow: '0 2px 8px rgba(108, 117, 125, 0.3)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#5a6268'
+                                                e.currentTarget.style.transform = 'translateY(-2px)'
+                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(108, 117, 125, 0.4)'
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#6c757d'
+                                                e.currentTarget.style.transform = 'translateY(0)'
+                                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.3)'
+                                            }}
+                                        >
+                                            🔄 Chọn lại
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

@@ -95,7 +95,7 @@ async function executeWorkflow(jobId, startDate, endDate) {
     logger.info('Callback URL:', { callbackUrl });
 
     const response = await axios.post(
-      'https://hdbproductautoreport.app.n8n.cloud/webhook-test/4291406d-c1d0-4663-80f3-7f6b4f8fc188',
+      'https://hdbankautoreport.app.n8n.cloud/webhook/4291406d-c1d0-4663-80f3-7f6b4f8fc188',
       {
         startDate,
         endDate,

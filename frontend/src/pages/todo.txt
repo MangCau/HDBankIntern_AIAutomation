@@ -9,8 +9,4 @@ Hiện thực đơn giản các thông tin tài khoản
 ----select new
 xếp category theo mức độ ưu tiên
 ---------
-(Quan trọng nhất: Nhấn nút tóm tắt => gọi n8n => xong gọi callback web)
-(Tại trang Quản lý) không cho phép chỉnh sửa, chỉnh lại model data (trường hình ảnh), ngày
-mặc định là từ đầu tháng tới ngày hiện tại, đổi tên lại thành "Lịch sử tóm tắt"
 (Tại mode xem lịch sử) Thêm 1 trang "Lịch sử báo cáo"
-xử lý mấy phần trong mục problems

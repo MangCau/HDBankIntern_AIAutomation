@@ -5,133 +5,12 @@ import { apiEndpoint } from '../config/api'
 // API URL - now uses environment variable for production
 const API_URL = apiEndpoint('api/data')
 
-// Dữ liệu giả cho demo (fallback)
-const MOCK_DATA = {
-  products: [
-    {
-      id: 1,
-      image: 'https://picsum.photos/seed/product1/300/200',
-      product_name: 'Gói tài khoản tiết kiệm HDBank Smart Save Plus',
-      product_segment: 'Tiết kiệm',
-      bank: ['HDBank', 'VietinBank'],
-      summary: 'Sản phẩm tiết kiệm linh hoạt với lãi suất ưu đãi lên đến 6.5%/năm, kỳ hạn từ 1-24 tháng, rút trước hạn không mất phí.',
-      date: '2025-01-15',
-      source_type: 'Website',
-      source_url: 'https://hdbank.com.vn/san-pham',
-      pdf_file_name: 'hdbank_smart_save_2025.pdf'
-    },
-    {
-      id: 2,
-      image: 'https://picsum.photos/seed/product2/300/200',
-      product_name: 'Thẻ tín dụng VietCredit Platinum Cash Back',
-      product_segment: 'Thẻ tín dụng',
-      bank: ['VietCredit'],
-      summary: 'Hoàn tiền 2% cho mọi giao dịch, miễn phí thường niên năm đầu, hạn mức lên đến 500 triệu đồng.',
-      date: '2025-01-14',
-      source_type: 'Brochure',
-      source_url: 'https://vietcredit.com.vn/the-tin-dung',
-      pdf_file_name: 'vietcredit_platinum_2025.pdf'
-    },
-    {
-      id: 3,
-      image: 'https://picsum.photos/seed/product3/300/200',
-      product_name: 'Vay mua nhà MB Home Easy với lãi suất ưu đãi 6.9%/năm',
-      product_segment: 'Vay mua nhà',
-      bank: ['MBBank', 'Techcombank'],
-      summary: 'Gói vay mua nhà với lãi suất cố định 6 tháng đầu, cho vay lên đến 80% giá trị bất động sản, thời gian vay tối đa 25 năm.',
-      date: '2025-01-13',
-      source_type: 'Website',
-      source_url: 'https://mbbank.com.vn/vay-mua-nha',
-      pdf_file_name: 'mbbank_home_easy_2025.pdf'
-    }
-  ],
-  bankingNews: [
-    {
-      id: 1,
-      image: 'https://picsum.photos/seed/banking1/300/200',
-      title: 'NHNN tăng room tín dụng cho các ngân hàng thương mại',
-      topic_group: 'Chính sách tiền tệ',
-      bank: ['NHNN', 'Toàn ngành'],
-      summary: 'Ngân hàng Nhà nước quyết định tăng room tín dụng thêm 2% cho các ngân hàng đáp ứng đủ điều kiện an toàn hoạt động, nhằm hỗ trợ tăng trưởng kinh tế năm 2025.',
-      date: '2025-01-18',
-      source_type: 'Báo chí',
-      source_url: 'https://sbv.gov.vn/tin-tuc',
-      pdf_file_name: 'nhnn_room_tin_dung_2025.pdf'
-    },
-    {
-      id: 2,
-      image: 'https://picsum.photos/seed/banking2/300/200',
-      title: 'Techcombank công bố lợi nhuận kỷ lục trong Q4/2024',
-      topic_group: 'Kết quả kinh doanh',
-      bank: ['Techcombank'],
-      summary: 'Techcombank đạt lợi nhuận trước thuế 18,500 tỷ đồng trong quý 4/2024, tăng 22% so với cùng kỳ năm trước nhờ tăng trưởng dư nợ tín dụng và thu nhập phí.',
-      date: '2025-01-17',
-      source_type: 'Báo cáo tài chính',
-      source_url: 'https://techcombank.com.vn/bao-cao-tai-chinh',
-      pdf_file_name: 'techcombank_q4_2024_earnings.pdf'
-    },
-    {
-      id: 3,
-      image: 'https://picsum.photos/seed/banking3/300/200',
-      title: 'VPBank triển khai hệ thống Core Banking mới',
-      topic_group: 'Công nghệ ngân hàng',
-      bank: ['VPBank'],
-      summary: 'VPBank chính thức đưa vào vận hành hệ thống Core Banking thế hệ mới, nâng cao năng lực xử lý giao dịch và trải nghiệm khách hàng.',
-      date: '2025-01-16',
-      source_type: 'Thông cáo báo chí',
-      source_url: 'https://vpbank.com.vn/cong-nghe',
-      pdf_file_name: 'vpbank_core_banking_2025.pdf'
-    }
-  ],
-  fintechNews: [
-    {
-      id: 1,
-      image: 'https://picsum.photos/seed/fintech1/300/200',
-      title: 'MoMo ra mắt tính năng đầu tư chứng khoán tích hợp',
-      fintech_topic: 'Đầu tư số',
-      area_affected: 'Việt Nam',
-      organization: 'MoMo',
-      summary: 'Ví điện tử MoMo công bố tích hợp tính năng mua bán chứng khoán trực tiếp trên ứng dụng, hợp tác cùng các công ty chứng khoán hàng đầu.',
-      date: '2025-01-19',
-      source_type: 'Website',
-      source_url: 'https://momo.vn/tin-tuc',
-      pdf_file_name: 'momo_stock_investment_2025.pdf'
-    },
-    {
-      id: 2,
-      image: 'https://picsum.photos/seed/fintech2/300/200',
-      title: 'Startup Fintech Việt Nam nhận vốn đầu tư 50 triệu USD',
-      fintech_topic: 'Đầu tư mạo hiểm',
-      area_affected: 'Toàn cầu',
-      organization: 'Tima',
-      summary: 'Nền tảng cho vay P2P Tima nhận vòng Series C trị giá 50 triệu USD từ quỹ đầu tư quốc tế, mở rộng thị trường khu vực Đông Nam Á.',
-      date: '2025-01-18',
-      source_type: 'Báo chí',
-      source_url: 'https://tima.vn/dau-tu',
-      pdf_file_name: 'tima_series_c_funding_2025.pdf'
-    },
-    {
-      id: 3,
-      image: 'https://picsum.photos/seed/fintech3/300/200',
-      title: 'ZaloPay tích hợp thanh toán BNPL với các sàn thương mại điện tử',
-      fintech_topic: 'Thanh toán số',
-      area_affected: 'Việt Nam',
-      organization: 'ZaloPay',
-      summary: 'ZaloPay ra mắt dịch vụ mua trước trả sau (BNPL) tích hợp với Shopee, Lazada và Tiki, cho phép người dùng mua hàng trả góp 0% lãi suất.',
-      date: '2025-01-17',
-      source_type: 'Thông cáo báo chí',
-      source_url: 'https://zalopay.vn/bnpl',
-      pdf_file_name: 'zalopay_bnpl_2025.pdf'
-    }
-  ]
-}
-
 type Category = 'products' | 'bankingNews' | 'fintechNews'
 
 // Base interface cho tất cả items
 interface BaseItem {
   id: string | number
-  image: string
+  image?: string
   summary: string
   date: string
   source_type: string
@@ -165,10 +44,17 @@ interface FintechNewsItem extends BaseItem {
 type NewsItem = ProductItem | BankingNewsItem | FintechNewsItem
 
 function Adjust() {
-    const today = new Date().toISOString().split('T')[0]
+  // Calculate date range: last 30 days
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+
+  const thirtyDaysAgo = new Date(today)
+  thirtyDaysAgo.setDate(today.getDate() - 30)
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0]
+
   const [selectedCategory, setSelectedCategory] = useState<Category>('products')
-    const [startDate, setStartDate] = useState(today)
-    const [endDate, setEndDate] = useState(today)
+  const [startDate, setStartDate] = useState(thirtyDaysAgoStr) // 30 days ago
+  const [endDate, setEndDate] = useState(todayStr) // Today
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedItems, setExpandedItems] = useState<Set<string | number>>(new Set())
 
@@ -200,11 +86,6 @@ function Adjust() {
     return dateStr
   }
 
-  // Generate placeholder image URL based on ID
-  const getPlaceholderImage = (id: string | number, type: 'product' | 'banking' | 'fintech'): string => {
-    return `https://picsum.photos/seed/${type}${id}/300/200`
-  }
-
   // Fetch data from API
   useEffect(() => {
     const fetchData = async () => {
@@ -228,10 +109,15 @@ function Adjust() {
           fintechRes.json()
         ])
 
+        console.log('Raw API Data:')
+        console.log('Products:', productsData.data[0])
+        console.log('Banking:', bankingData.data[0])
+        console.log('Fintech:', fintechData.data[0])
+
         // Transform API data to match our interface
-        const transformedProducts: ProductItem[] = productsData.data.map((item: any, index: number) => ({
+        const transformedProducts: ProductItem[] = productsData.data.map((item: any) => ({
           id: item._id,
-          image: item.image || getPlaceholderImage(index, 'product'),
+          image: item.image,
           product_name: item.product_name,
           product_segment: item.product_segment || '',
           bank: Array.isArray(item.bank) ? item.bank : (item.bank ? [item.bank] : []),
@@ -242,9 +128,9 @@ function Adjust() {
           pdf_file_name: item.pdf_file_name || ''
         }))
 
-        const transformedBanking: BankingNewsItem[] = bankingData.data.map((item: any, index: number) => ({
+        const transformedBanking: BankingNewsItem[] = bankingData.data.map((item: any) => ({
           id: item._id,
-          image: item.image || getPlaceholderImage(index, 'banking'),
+          image: item.image,
           title: item.title,
           topic_group: item.topic_group || '',
           bank: Array.isArray(item.bank_related) ? item.bank_related : (item.bank_related ? [item.bank_related] : []),
@@ -255,9 +141,9 @@ function Adjust() {
           pdf_file_name: item.pdf_file_name || ''
         }))
 
-        const transformedFintech: FintechNewsItem[] = fintechData.data.map((item: any, index: number) => ({
+        const transformedFintech: FintechNewsItem[] = fintechData.data.map((item: any) => ({
           id: item._id,
-          image: item.image || getPlaceholderImage(index, 'fintech'),
+          image: item.image,
           title: item.title,
           fintech_topic: item.fintech_topic || '',
           area_affected: Array.isArray(item.area_affected) ? item.area_affected.join(', ') : (item.area_affected || ''),
@@ -269,17 +155,17 @@ function Adjust() {
           pdf_file_name: item.pdf_file_name || ''
         }))
 
+        console.log('Transformed Data:')
+        console.log('Transformed Products:', transformedProducts[0])
+        console.log('Transformed Banking:', transformedBanking[0])
+        console.log('Transformed Fintech:', transformedFintech[0])
+
         setProducts(transformedProducts)
         setBankingNews(transformedBanking)
         setFintechNews(transformedFintech)
       } catch (err) {
         console.error('Error fetching data:', err)
-        setError('Không thể tải dữ liệu từ server. Đang sử dụng dữ liệu mẫu.')
-
-        // Use mock data as fallback
-        setProducts(MOCK_DATA.products.map(item => ({ ...item, id: String(item.id) })) as any)
-        setBankingNews(MOCK_DATA.bankingNews.map(item => ({ ...item, id: String(item.id) })) as any)
-        setFintechNews(MOCK_DATA.fintechNews.map(item => ({ ...item, id: String(item.id) })) as any)
+        setError('Không thể tải dữ liệu từ server.')
       } finally {
         setLoading(false)
       }
@@ -567,9 +453,11 @@ function Adjust() {
             <div className="news-list">
               {getFilteredData().map((item) => (
                   <article key={item.id} className="news-card">
-              <div className="news-image">
-                <img src={item.image} alt={getTitle(item)} />
-              </div>
+              {item.image && (
+                <div className="news-image">
+                  <img src={item.image} alt={getTitle(item)} />
+                </div>
+              )}
               <div className="news-content">
                 <h2 className="news-title">{getTitle(item)}</h2>
                 <p className="news-summary">{item.summary}</p>
@@ -656,17 +544,17 @@ function Adjust() {
                       rel="noopener noreferrer"
                       className="meta-item"
                       style={{
-                        color: '#F00020',
+                        color: '#F5B800',
                         textDecoration: 'none',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.color = '#c00018'
+                        e.currentTarget.style.color = '#F5B800'
                         e.currentTarget.style.textDecoration = 'underline'
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.color = '#F00020'
+                        e.currentTarget.style.color = '#F5B800'
                         e.currentTarget.style.textDecoration = 'none'
                       }}
                     >

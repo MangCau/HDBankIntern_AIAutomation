@@ -5,6 +5,9 @@ import '../App.css'
 function Layout() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [password, setPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
 
   // Load appMode from localStorage, default to 'report' if not found
   const [appMode, setAppMode] = useState<'report' | 'edit' | 'manage'>(() => {
@@ -30,18 +33,45 @@ function Layout() {
     }
   }, [location.pathname])
 
-  // Toggle between report and edit mode
-  const toggleMode = () => {
-    const newMode = appMode === 'report' ? 'edit' : 'report'
-    setAppMode(newMode)
+  // Switch to report mode
+  const switchToReportMode = () => {
+    setAppMode('report')
     setShowUserMenu(false)
+    navigate('/') // Navigate to Home/Report page
+  }
 
-    // Auto-navigate to appropriate page based on mode
-    if (newMode === 'report') {
-      navigate('/') // Navigate to Home/Report page
+  // Switch to edit mode (with password protection)
+  const switchToEditMode = () => {
+    setShowUserMenu(false)
+    setShowPasswordModal(true) // Show password modal instead of directly switching
+  }
+
+  // Handle password submission
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    // TODO: Replace with actual password validation logic
+    const CORRECT_PASSWORD = '0000'
+
+    if (password === CORRECT_PASSWORD) {
+      // Password correct - switch to edit mode
+      setAppMode('edit')
+      setShowPasswordModal(false)
+      setPassword('')
+      setPasswordError('')
+      navigate('/select-news')
     } else {
-      navigate('/select-news') // Navigate to News page (default for edit mode)
+      // Password incorrect - show error
+      setPasswordError('Mật khẩu không đúng!')
+      setPassword('')
     }
+  }
+
+  // Handle password modal close
+  const handlePasswordModalClose = () => {
+    setShowPasswordModal(false)
+    setPassword('')
+    setPasswordError('')
   }
 
   // Switch to manage mode (history view)
@@ -80,7 +110,7 @@ function Layout() {
             <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>Báo cáo</Link>
           ) : appMode === 'manage' ? (
             // Manage mode: Only show Settings page
-            <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Quản lý</Link>
+            <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Lịch sử</Link>
           ) : (
             // Edit mode: Show all other pages
             <>
@@ -171,24 +201,39 @@ function Layout() {
                   </svg>
                   Quản lý tài khoản
                 </a>
-                <button onClick={switchToManageMode} className="dropdown-item" style={{width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer'}}>
+                <button
+                  onClick={switchToManageMode}
+                  className={`dropdown-item ${appMode === 'manage' ? 'active' : ''}`}
+                  disabled={appMode === 'manage'}
+                  style={{width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: appMode === 'manage' ? 'not-allowed' : 'pointer', opacity: appMode === 'manage' ? 0.5 : 1}}
+                >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
                   </svg>
-                  Xem lịch sử
+                  Xem lịch sử {appMode === 'manage' && '✓'}
                 </button>
                 <div className="dropdown-divider"></div>
-                <button onClick={toggleMode} className="dropdown-item" style={{width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer'}}>
+                <button
+                  onClick={switchToEditMode}
+                  className={`dropdown-item ${appMode === 'edit' ? 'active' : ''}`}
+                  disabled={appMode === 'edit'}
+                  style={{width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: appMode === 'edit' ? 'not-allowed' : 'pointer', opacity: appMode === 'edit' ? 0.5 : 1}}
+                >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    {appMode === 'report' ? (
-                      // Edit icon
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    ) : (
-                      // Report/Document icon
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" />
-                    )}
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
-                  {appMode === 'report' ? 'Chuyển sang chế độ Chỉnh sửa' : 'Chuyển sang chế độ Báo cáo'}
+                  Chế độ chỉnh sửa {appMode === 'edit' && '✓'}
+                </button>
+                <button
+                  onClick={switchToReportMode}
+                  className={`dropdown-item ${appMode === 'report' ? 'active' : ''}`}
+                  disabled={appMode === 'report'}
+                  style={{width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: appMode === 'report' ? 'not-allowed' : 'pointer', opacity: appMode === 'report' ? 0.5 : 1}}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" />
+                  </svg>
+                  Chế độ báo cáo {appMode === 'report' && '✓'}
                 </button>
                 <div className="dropdown-divider"></div>
                 <a href="#logout" className="dropdown-item logout">
@@ -207,6 +252,53 @@ function Layout() {
 
       {/* Page content will be rendered here */}
       <Outlet />
+
+      {/* Password Modal */}
+      {showPasswordModal && (
+        <div className="modal-overlay" onClick={handlePasswordModalClose}>
+          <div className="modal-content password-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Xác thực chế độ chỉnh sửa</h3>
+              <button className="modal-close-btn" onClick={handlePasswordModalClose}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handlePasswordSubmit}>
+              <div className="modal-body">
+                <p style={{ marginBottom: '20px', color: '#666' }}>
+                  Vui lòng nhập mật khẩu để truy cập chế độ chỉnh sửa
+                </p>
+                <div className="form-group">
+                  <label htmlFor="password">Mật khẩu</label>
+                  <input
+                    type="password"
+                    id="password"
+                    className={`form-input ${passwordError ? 'error' : ''}`}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Nhập mật khẩu"
+                    autoFocus
+                  />
+                  {passwordError && (
+                    <span className="error-message">{passwordError}</span>
+                  )}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handlePasswordModalClose}>
+                  Hủy
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Xác nhận
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   )
 }
