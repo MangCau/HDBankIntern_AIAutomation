@@ -45,3 +45,9 @@ coverage/
 .temp/
 tmp/
 nul
+
+# ngrok
+ngrok/
+ngrok.exe
+*.ngrok.yml
+setup-ngrok.ps1
