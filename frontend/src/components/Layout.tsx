@@ -110,7 +110,10 @@ function Layout() {
             <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>Báo cáo</Link>
           ) : appMode === 'manage' ? (
             // Manage mode: Only show Settings page
-            <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Lịch sử</Link>
+            <>
+              <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>Lịch sử tóm tắt</Link>
+              <Link to="/historyreport" className={`nav-link ${location.pathname === '/historyreport' ? 'active' : ''}`}>Lịch sử báo cáo</Link>
+            </>
           ) : (
             // Edit mode: Show all other pages
             <>
@@ -279,7 +282,7 @@ function Layout() {
                     className={`form-input ${passwordError ? 'error' : ''}`}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Nhập mật khẩu"
+                    placeholder="Mật khẩu: 0000"
                     autoFocus
                   />
                   {passwordError && (

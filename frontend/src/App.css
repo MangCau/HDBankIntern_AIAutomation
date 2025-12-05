@@ -3358,3 +3358,137 @@ button.nav-link.active {
 .btn-secondary:active {
   background-color: #edf2f7;
 }
+
+/* ========== GLOBAL WORKFLOW NOTIFICATION POPUP ========== */
+.notification-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.notification-popup {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 90%;
+  animation: slideUpBounce 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  overflow: hidden;
+}
+
+@keyframes slideUpBounce {
+  0% {
+    transform: translateY(100px) scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.notification-popup-content {
+  padding: 32px;
+  text-align: center;
+}
+
+.notification-popup-content.success {
+  border-top: 5px solid #28a745;
+}
+
+.notification-popup-content.error {
+  border-top: 5px solid #dc3545;
+}
+
+.notification-popup-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  animation: iconPop 0.6s ease-out 0.2s both;
+}
+
+@keyframes iconPop {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.notification-popup-text h3 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: #2d3748;
+}
+
+.notification-popup-text p {
+  font-size: 16px;
+  color: #718096;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+.notification-popup-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.btn-notification-primary {
+  padding: 12px 32px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.btn-notification-primary:hover {
+  background-color: #218838;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
+}
+
+.btn-notification-primary:active {
+  transform: translateY(0);
+}
+
+.btn-notification-secondary {
+  padding: 12px 32px;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-notification-secondary:hover {
+  background-color: #5a6268;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(108, 117, 125, 0.4);
+}
+
+.btn-notification-secondary:active {
+  transform: translateY(0);
+}

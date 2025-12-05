@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import '../App.css'
 
 type Category = 'products' | 'bankingNews' | 'fintechNews'
@@ -23,7 +24,10 @@ interface NewsItem {
   organization?: string
 }
 
-function HomePage() {
+function ViewReport() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+
   const [activeSection, setActiveSection] = useState<Category>('products')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -49,12 +53,12 @@ function HomePage() {
     setExpandedItems(newSet)
   }
 
-  // Fetch latest report on component mount
+  // Fetch report by ID on component mount
   useEffect(() => {
-    const fetchLatestReport = async () => {
+    const fetchReport = async () => {
       try {
         setLoading(true)
-        const response = await fetch('http://localhost:5000/api/reports/latest')
+        const response = await fetch(`http://localhost:5000/api/reports/${id}`)
         const result = await response.json()
 
         if (!result.success) {
@@ -104,15 +108,17 @@ function HomePage() {
         setFintechNews(fintechData)
         setError(null)
       } catch (err) {
-        console.error('Error fetching latest report:', err)
+        console.error('Error fetching report:', err)
         setError(err instanceof Error ? err.message : 'Failed to load report')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchLatestReport()
-  }, [])
+    if (id) {
+      fetchReport()
+    }
+  }, [id])
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString)
@@ -340,7 +346,7 @@ function HomePage() {
       }}>
         <p style={{ fontSize: '18px', color: '#F00020' }}>Lỗi: {error}</p>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => navigate('/historyreport')}
           style={{
             padding: '12px 24px',
             backgroundColor: '#F00020',
@@ -351,7 +357,7 @@ function HomePage() {
             fontSize: '16px'
           }}
         >
-          Tải lại trang
+          Quay lại lịch sử báo cáo
         </button>
       </div>
     )
@@ -359,6 +365,44 @@ function HomePage() {
 
   return (
     <div className="report-container">
+      {/* Back Button */}
+      <div style={{
+        maxWidth: '1400px',
+        margin: '0 auto',
+        padding: '20px 40px 0'
+      }}>
+        <button
+          onClick={() => navigate('/historyreport')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            backgroundColor: 'transparent',
+            color: '#F00020',
+            border: '2px solid #F00020',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '600',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#F00020'
+            e.currentTarget.style.color = 'white'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent'
+            e.currentTarget.style.color = '#F00020'
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Quay lại
+        </button>
+      </div>
+
       {/* Sticky Navigation Bar */}
       <nav className="report-nav">
         <div className="nav-content">
@@ -415,4 +459,4 @@ function HomePage() {
   )
 }
 
-export default HomePage
+export default ViewReport

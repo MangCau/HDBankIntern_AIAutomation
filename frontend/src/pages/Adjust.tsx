@@ -122,7 +122,7 @@ function Adjust() {
           product_segment: item.product_segment || '',
           bank: Array.isArray(item.bank) ? item.bank : (item.bank ? [item.bank] : []),
           summary: item.description || '',
-          date: convertDateFormat(item.date_published || ''),
+          date: convertDateFormat(item.published_date || ''),
           source_type: item.source_type || '',
           source_url: item.source_url || '',
           pdf_file_name: item.pdf_file_name || ''
@@ -197,7 +197,13 @@ function Adjust() {
   const getFilteredData = (): NewsItem[] => {
     const data = getCategoryData()
     let filtered = data.filter(item => {
+      // If item has no date, include it (will be shown at the end)
+      if (!item.date) return true
+
       const itemDate = new Date(item.date)
+      // If date is invalid, include it
+      if (isNaN(itemDate.getTime())) return true
+
       const start = new Date(startDate)
       const end = new Date(endDate)
       end.setHours(23, 59, 59, 999)
@@ -226,8 +232,14 @@ function Adjust() {
       ...fintechNews
     ]
 
+    // Return true if there's any data at all (with or without valid dates)
+    if (allData.length > 0) return true
+
     return allData.some(item => {
+      if (!item.date) return true
       const itemDate = new Date(item.date)
+      if (isNaN(itemDate.getTime())) return true
+
       const start = new Date(startDate)
       const end = new Date(endDate)
       end.setHours(23, 59, 59, 999)
@@ -243,7 +255,10 @@ function Adjust() {
     else data = fintechNews
 
     return data.filter(item => {
+      if (!item.date) return false
       const itemDate = new Date(item.date)
+      if (isNaN(itemDate.getTime())) return false
+
       const start = new Date(startDate)
       const end = new Date(endDate)
       end.setHours(23, 59, 59, 999)
@@ -261,7 +276,11 @@ function Adjust() {
   }
 
   const formatDate = (dateString: string): string => {
+    if (!dateString) return 'Chưa có ngày'
+
     const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Chưa có ngày'
+
     return date.toLocaleDateString('vi-VN', {
       day: '2-digit',
       month: '2-digit',
@@ -496,7 +515,7 @@ function Adjust() {
 
                       <p><strong>Loại nguồn:</strong> {item.source_type}</p>
                       <p><strong>File PDF:</strong> {item.pdf_file_name}</p>
-                      <p><strong>Ngày phát hành:</strong> {formatDate(item.date)}</p>
+                      <p><strong>Ngày đăng:</strong> {formatDate(item.date)}</p>
                       <p><strong>Nguồn:</strong> <a href={item.source_url} target="_blank" rel="noopener noreferrer">{item.source_url}</a></p>
                     </div>
                   </div>

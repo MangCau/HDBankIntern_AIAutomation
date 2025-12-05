@@ -119,13 +119,14 @@ router.patch('/header-processing', checkDbConnection, async (req, res) => {
   }
 });
 
-// Get all selected items from all 3 summary tables for summary view
+// Get all selected items from all 4 summary tables for summary view
 router.get('/summary-selected', checkDbConnection, async (req, res) => {
   try {
-    const [newProducts, marketTrends, fintechNews] = await Promise.all([
+    const [newProducts, marketTrends, fintechNews, headerProcessing] = await Promise.all([
       NewProductService.find({ selected: true }).sort({ date_published: -1 }),
       BankingMarketTrend.find({ selected: true }).sort({ published_date: -1 }),
-      FintechNews.find({ selected: true }).sort({ published_date: -1 })
+      FintechNews.find({ selected: true }).sort({ published_date: -1 }),
+      HeaderProcessing.find({ selected: true }).sort({ published_date: -1 })
     ]);
 
     res.json({
@@ -133,7 +134,8 @@ router.get('/summary-selected', checkDbConnection, async (req, res) => {
       data: {
         newProducts,
         marketTrends,
-        fintechNews
+        fintechNews,
+        headerProcessing
       }
     });
   } catch (error) {
@@ -205,6 +207,10 @@ router.patch('/update-field/:collection/:id', checkDbConnection, async (req, res
         Model = FintechNews;
         allowedFields = ['title', 'summary', 'selected'];
         break;
+      case 'header-processing':
+        Model = HeaderProcessing;
+        allowedFields = ['title', 'summary', 'selected'];
+        break;
       default:
         return res.status(400).json({ success: false, message: 'Invalid collection' });
     }
@@ -234,7 +240,7 @@ router.patch('/update-field/:collection/:id', checkDbConnection, async (req, res
   }
 });
 
-// Generate image using Imagen 3 API
+// Generate image using Imagen 4.0 API
 router.post('/generate-image/:collection/:id', checkDbConnection, async (req, res) => {
   try {
     const { collection, id } = req.params;

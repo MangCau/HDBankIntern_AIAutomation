@@ -1,6 +1,8 @@
 import '../App.css'
 import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiEndpoint } from '../config/api'
+import { useNotification } from '../contexts/NotificationContext'
 
 // API URL - now uses environment variable for production
 const API_URL = apiEndpoint('api/data')
@@ -95,7 +97,19 @@ interface FintechNewsData {
 }
 
 // Summary Content Component with real data from API
-function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNewsCount: number, onResetSelection: () => void }) {
+function SummaryContent({
+    // confirmedNewsCount,
+    onResetWithCleanup,
+    onReportConfirmed,
+    startDateISO,
+    endDateISO
+}: {
+    confirmedNewsCount: number,
+    onResetWithCleanup: () => Promise<void>,
+    onReportConfirmed: () => void,
+    startDateISO: string,
+    endDateISO: string
+}) {
     const [expandedItems, setExpandedItems] = useState<Record<string, Set<string>>>({
         'Sản phẩm & Dịch vụ mới': new Set(),
         'Tin tức ngành Ngân hàng': new Set(),
@@ -105,6 +119,14 @@ function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNew
     const [tempTitleValue, setTempTitleValue] = useState('')
     const [tempSummaryValue, setTempSummaryValue] = useState('')
     const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null)
+
+    // Pagination state - track current page per category (default page 1)
+    const [currentPage, setCurrentPage] = useState<Record<string, number>>({
+        'Sản phẩm & Dịch vụ mới': 1,
+        'Tin tức ngành Ngân hàng': 1,
+        'Tin tức ngành Fintech': 1
+    })
+    const itemsPerPage = 5
 
     // Real data from API
     const [newProducts, setNewProducts] = useState<NewProductData[]>([])
@@ -365,38 +387,6 @@ function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNew
         }
     }
 
-    // Reset all selected items to false in all 3 collections
-    const handleResetAllSelections = async () => {
-        try {
-            const allItems = [
-                ...newProducts.map(item => ({ id: item._id, collection: 'new-products' })),
-                ...marketTrends.map(item => ({ id: item._id, collection: 'market-trends' })),
-                ...fintechNews.map(item => ({ id: item._id, collection: 'fintech-news' }))
-            ]
-
-            // Update all items to selected = false
-            const updatePromises = allItems.map(({ id, collection }) =>
-                fetch(apiEndpoint(`api/data/update-field/${collection}/${id}`), {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        field: 'selected',
-                        value: false
-                    })
-                })
-            )
-
-            await Promise.all(updatePromises)
-
-            // Clear pending changes
-            setPendingSelectionChanges(new Map())
-
-            console.log('All selections reset successfully')
-        } catch (error) {
-            console.error('Error resetting selections:', error)
-            alert('Có lỗi xảy ra khi reset!')
-        }
-    }
 
     const formatDate = (dateString: string): string => {
         if (!dateString) return 'N/A'
@@ -560,7 +550,10 @@ function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNew
                     </h2>
 
                     <div className="news-list">
-                        {items.map((item: any) => {
+                        {items.slice(
+                            (currentPage[categoryTitle] - 1) * itemsPerPage,
+                            currentPage[categoryTitle] * itemsPerPage
+                        ).map((item: any) => {
                             const uniqueKey = `${categoryTitle}-${item._id}`
                             const isExpanded = expandedItems[categoryTitle]?.has(item._id) || false
 
@@ -1012,7 +1005,7 @@ function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNew
                                                     {item.source_url && (
                                                         <p><strong>Nguồn:</strong> <a href={item.source_url} target="_blank" rel="noopener noreferrer">{item.source_url}</a></p>
                                                     )}
-                                                    <p><strong>Nguồn gốc:</strong> Tự động tóm tắt từ {confirmedNewsCount} tin tức đã chọn</p>
+                                                    {/* <p><strong>Nguồn gốc:</strong> Tự động tóm tắt từ {confirmedNewsCount} tin tức đã chọn</p> */}
                                                 </div>
                                             </div>
                                         )}
@@ -1088,6 +1081,139 @@ function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNew
                             )
                         })}
                     </div>
+
+                    {/* Pagination controls */}
+                    {items.length > itemsPerPage && (() => {
+                        const totalPages = Math.ceil(items.length / itemsPerPage)
+                        const currentPageNum = currentPage[categoryTitle] || 1
+
+                        return (
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                gap: '8px',
+                                marginTop: '24px'
+                            }}>
+                                {/* Previous button */}
+                                <button
+                                    onClick={() => {
+                                        if (currentPageNum > 1) {
+                                            setCurrentPage(prev => ({
+                                                ...prev,
+                                                [categoryTitle]: currentPageNum - 1
+                                            }))
+                                        }
+                                    }}
+                                    disabled={currentPageNum === 1}
+                                    style={{
+                                        padding: '8px 16px',
+                                        backgroundColor: currentPageNum === 1 ? '#f0f0f0' : '#ffffff',
+                                        color: currentPageNum === 1 ? '#999' : '#F00020',
+                                        border: '2px solid ' + (currentPageNum === 1 ? '#ddd' : '#F00020'),
+                                        borderRadius: '6px',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: currentPageNum === 1 ? 'not-allowed' : 'pointer',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (currentPageNum > 1) {
+                                            e.currentTarget.style.backgroundColor = '#F00020'
+                                            e.currentTarget.style.color = '#ffffff'
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (currentPageNum > 1) {
+                                            e.currentTarget.style.backgroundColor = '#ffffff'
+                                            e.currentTarget.style.color = '#F00020'
+                                        }
+                                    }}
+                                >
+                                    ‹ Trước
+                                </button>
+
+                                {/* Page numbers */}
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                                        <button
+                                            key={pageNum}
+                                            onClick={() => {
+                                                setCurrentPage(prev => ({
+                                                    ...prev,
+                                                    [categoryTitle]: pageNum
+                                                }))
+                                            }}
+                                            style={{
+                                                padding: '8px 12px',
+                                                backgroundColor: currentPageNum === pageNum ? '#F00020' : '#ffffff',
+                                                color: currentPageNum === pageNum ? '#ffffff' : '#F00020',
+                                                border: '2px solid #F00020',
+                                                borderRadius: '6px',
+                                                fontSize: '14px',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                minWidth: '40px'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (currentPageNum !== pageNum) {
+                                                    e.currentTarget.style.backgroundColor = '#F00020'
+                                                    e.currentTarget.style.color = '#ffffff'
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (currentPageNum !== pageNum) {
+                                                    e.currentTarget.style.backgroundColor = '#ffffff'
+                                                    e.currentTarget.style.color = '#F00020'
+                                                }
+                                            }}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Next button */}
+                                <button
+                                    onClick={() => {
+                                        if (currentPageNum < totalPages) {
+                                            setCurrentPage(prev => ({
+                                                ...prev,
+                                                [categoryTitle]: currentPageNum + 1
+                                            }))
+                                        }
+                                    }}
+                                    disabled={currentPageNum === totalPages}
+                                    style={{
+                                        padding: '8px 16px',
+                                        backgroundColor: currentPageNum === totalPages ? '#f0f0f0' : '#ffffff',
+                                        color: currentPageNum === totalPages ? '#999' : '#F00020',
+                                        border: '2px solid ' + (currentPageNum === totalPages ? '#ddd' : '#F00020'),
+                                        borderRadius: '6px',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: currentPageNum === totalPages ? 'not-allowed' : 'pointer',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (currentPageNum < totalPages) {
+                                            e.currentTarget.style.backgroundColor = '#F00020'
+                                            e.currentTarget.style.color = '#ffffff'
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (currentPageNum < totalPages) {
+                                            e.currentTarget.style.backgroundColor = '#ffffff'
+                                            e.currentTarget.style.color = '#F00020'
+                                        }
+                                    }}
+                                >
+                                    Sau ›
+                                </button>
+                            </div>
+                        )
+                    })()}
                 </div>
             ))}
 
@@ -1116,14 +1242,7 @@ function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNew
                 )}
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                     <button
-                        onClick={async () => {
-                            if (window.confirm('Bạn có chắc muốn chọn lại? Tất cả tin tức đã chọn sẽ bị bỏ chọn.')) {
-                                // Reset all selected = false in database
-                                await handleResetAllSelections()
-                                // Call parent's reset function
-                                onResetSelection()
-                            }
-                        }}
+                        onClick={onResetWithCleanup}
                         style={{
                             padding: '16px 40px',
                             backgroundColor: '#6c757d',
@@ -1158,10 +1277,33 @@ function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNew
                     </button>
                     <button
                         onClick={async () => {
-                            // Save pending changes first
-                            await handleSaveSelectionChanges()
-                            // Navigate to Homepage page (Homepage)
-                            window.location.href = '/'
+                            try {
+                                // Save pending changes first
+                                await handleSaveSelectionChanges()
+
+                                // Create report with selected items
+                                const response = await fetch(apiEndpoint('api/reports/create'), {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        startDate: startDateISO,
+                                        endDate: endDateISO
+                                    })
+                                })
+
+                                const result = await response.json()
+
+                                if (result.success) {
+                                    alert(`Báo cáo đã được tạo thành công!\nTổng số tin: ${result.report.totalItems}\nKhoảng thời gian: ${result.report.dateRange}`)
+                                    // Call parent function to reset and navigate to Adjust page
+                                    onReportConfirmed()
+                                } else {
+                                    alert('Có lỗi xảy ra khi tạo báo cáo: ' + (result.error || 'Unknown error'))
+                                }
+                            } catch (error) {
+                                console.error('Error creating report:', error)
+                                alert('Có lỗi xảy ra khi tạo báo cáo!')
+                            }
                         }}
                         style={{
                             padding: '16px 40px',
@@ -1202,17 +1344,30 @@ function SummaryContent({ confirmedNewsCount, onResetSelection }: { confirmedNew
 }
 
 function SelectNews() {
+    // Navigation
+    const navigate = useNavigate()
+
+    // Global notification context
+    const { startMonitoringWorkflow, stopMonitoringWorkflow } = useNotification()
+
     // State for data from API
     const [newsData, setNewsData] = useState<NewsItem[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
     // Initialize with current month date range (from 1st of current month to today)
+    // WITH localStorage persistence to maintain date range across steps
     const today = new Date()
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
 
-    const [startDateISO, setStartDateISO] = useState(firstDayOfMonth.toISOString().split('T')[0])
-    const [endDateISO, setEndDateISO] = useState(today.toISOString().split('T')[0])
+    const [startDateISO, setStartDateISO] = useState(() => {
+        const saved = localStorage.getItem('selectNews_startDateISO')
+        return saved || firstDayOfMonth.toISOString().split('T')[0]
+    })
+    const [endDateISO, setEndDateISO] = useState(() => {
+        const saved = localStorage.getItem('selectNews_endDateISO')
+        return saved || today.toISOString().split('T')[0]
+    })
     const [selectedCategory, setSelectedCategory] = useState<string>('')
     const [isPriorityView, setIsPriorityView] = useState(false) // New state to track priority view
     const [isSelectionMode, setIsSelectionMode] = useState(false)
@@ -1233,12 +1388,9 @@ function SelectNews() {
     })
 
     // Workflow step state with localStorage persistence
-    // IMPORTANT: If workflowCompleted=true, always start at 'summary' step
+    // IMPORTANT: If workflowCompleted=true, stay at 'next' step to show success message and buttons
+    // Only go to 'summary' when user explicitly clicks "Xem báo cáo"
     const [currentStep, setCurrentStep] = useState<'selection' | 'next' | 'summary'>(() => {
-        const workflowDone = localStorage.getItem('selectNews_workflowCompleted') === 'true'
-        if (workflowDone) {
-            return 'summary'
-        }
         const saved = localStorage.getItem('selectNews_currentStep')
         return (saved as 'selection' | 'next' | 'summary') || 'selection'
     })
@@ -1337,7 +1489,9 @@ function SelectNews() {
         localStorage.setItem('selectNews_isProcessing', isProcessing.toString())
         localStorage.setItem('selectNews_jobId', jobId || '')
         localStorage.setItem('selectNews_workflowCompleted', workflowCompleted.toString())
-    }, [currentStep, confirmedNews, isProcessing, jobId, workflowCompleted])
+        localStorage.setItem('selectNews_startDateISO', startDateISO)
+        localStorage.setItem('selectNews_endDateISO', endDateISO)
+    }, [currentStep, confirmedNews, isProcessing, jobId, workflowCompleted, startDateISO, endDateISO])
 
     // Resume polling if page was refreshed during processing
     useEffect(() => {
@@ -1347,13 +1501,8 @@ function SelectNews() {
         }
     }, []) // Run only once on mount
 
-    // Auto-navigate to summary when workflow completes
-    useEffect(() => {
-        if (workflowCompleted) {
-            console.log('Workflow completed - locking to summary step')
-            setCurrentStep('summary')
-        }
-    }, [workflowCompleted])
+    // NOTE: Removed auto-navigate to summary - now user must click "Xem báo cáo" button
+    // This allows user to see success message and choose between viewing report or reselecting
 
     // Convert ISO date (YYYY-MM-DD) to Vietnamese format (DD/MM/YYYY)
     const convertISOToVN = (isoDate: string): string => {
@@ -1509,7 +1658,10 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
             const data = await response.json()
             setJobId(data.jobId)
 
-            // Start polling for job status
+            // Start global notification monitoring (works across all pages)
+            startMonitoringWorkflow(data.jobId)
+
+            // Start polling for job status (for current page)
             startPolling(data.jobId)
         } catch (error) {
             console.error('Error triggering workflow:', error)
@@ -1553,15 +1705,28 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
         setConfirmedPriorities({})
         setTempPriorities({})
 
+        // Stop global notification monitoring
+        stopMonitoringWorkflow()
+
         // Clear localStorage
         localStorage.removeItem('selectNews_currentStep')
         localStorage.removeItem('selectNews_confirmedNews')
         localStorage.removeItem('selectNews_isProcessing')
         localStorage.removeItem('selectNews_jobId')
         localStorage.removeItem('selectNews_workflowCompleted')
+        localStorage.removeItem('selectNews_startDateISO')
+        localStorage.removeItem('selectNews_endDateISO')
     }
 
-    // Reset with database cleanup (set all selected = false)
+    // Handle report confirmed: Reset to selection step and navigate to Adjust page
+    const handleReportConfirmed = () => {
+        // Reset to selection step
+        handleResetToSelection()
+        // Navigate to Homepage page (/)
+        navigate('/')
+    }
+
+    // Reset with database cleanup (set all selected = false in ALL 4 collections)
     const handleResetWithDatabaseCleanup = async () => {
         if (window.confirm('Bạn có chắc muốn chọn lại? Tất cả tin tức đã chọn sẽ bị bỏ chọn.')) {
             try {
@@ -1573,7 +1738,8 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                     const allItems = [
                         ...result.data.newProducts.map((item: any) => ({ id: item._id, collection: 'new-products' })),
                         ...result.data.marketTrends.map((item: any) => ({ id: item._id, collection: 'market-trends' })),
-                        ...result.data.fintechNews.map((item: any) => ({ id: item._id, collection: 'fintech-news' }))
+                        ...result.data.fintechNews.map((item: any) => ({ id: item._id, collection: 'fintech-news' })),
+                        ...(result.data.headerProcessing || []).map((item: any) => ({ id: item._id, collection: 'header-processing' }))
                     ]
 
                     // Update all items to selected = false
@@ -1817,7 +1983,10 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                     {/* Content area for summary step - Mocked data theo 3 categories */}
                     <SummaryContent
                         confirmedNewsCount={confirmedNews.length}
-                        onResetSelection={handleResetToSelection}
+                        onResetWithCleanup={handleResetWithDatabaseCleanup}
+                        onReportConfirmed={handleReportConfirmed}
+                        startDateISO={startDateISO}
+                        endDateISO={endDateISO}
                     />
                 </div>
             </div>
@@ -1976,67 +2145,100 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                                 )}
 
                                 {workflowCompleted && (
-                                    <div style={{ display: 'flex', gap: '12px' }}>
-                                        <button
-                                            onClick={() => setCurrentStep('summary')}
-                                            style={{
-                                                padding: '14px 40px',
-                                                backgroundColor: '#28a745',
-                                                color: '#ffffff',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                fontSize: '16px',
-                                                fontWeight: '600',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.3s ease',
-                                                boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '8px'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = '#218838'
-                                                e.currentTarget.style.transform = 'translateY(-2px)'
-                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.4)'
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.backgroundColor = '#28a745'
-                                                e.currentTarget.style.transform = 'translateY(0)'
-                                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(40, 167, 69, 0.3)'
-                                            }}
-                                        >
-                                            ✅ Xem tóm tắt
-                                        </button>
-                                        <button
-                                            onClick={handleResetWithDatabaseCleanup}
-                                            style={{
-                                                padding: '14px 40px',
-                                                backgroundColor: '#6c757d',
-                                                color: '#ffffff',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                fontSize: '16px',
-                                                fontWeight: '600',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.3s ease',
-                                                boxShadow: '0 2px 8px rgba(108, 117, 125, 0.3)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '8px'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = '#5a6268'
-                                                e.currentTarget.style.transform = 'translateY(-2px)'
-                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(108, 117, 125, 0.4)'
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.backgroundColor = '#6c757d'
-                                                e.currentTarget.style.transform = 'translateY(0)'
-                                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.3)'
-                                            }}
-                                        >
-                                            🔄 Chọn lại
-                                        </button>
+                                    <div style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '20px'
+                                    }}>
+                                        {/* Success Message */}
+                                        <div style={{
+                                            padding: '24px 32px',
+                                            backgroundColor: '#d4edda',
+                                            border: '2px solid #28a745',
+                                            borderRadius: '12px',
+                                            textAlign: 'center',
+                                            maxWidth: '500px',
+                                            boxShadow: '0 4px 12px rgba(40, 167, 69, 0.2)'
+                                        }}>
+                                            <div style={{ marginBottom: '12px', fontSize: '48px' }}>✅</div>
+                                            <div style={{
+                                                fontSize: '20px',
+                                                fontWeight: '700',
+                                                color: '#155724',
+                                                marginBottom: '8px'
+                                            }}>
+                                                Tóm tắt thành công!
+                                            </div>
+                                            <div style={{ fontSize: '15px', color: '#155724', lineHeight: '1.5' }}>
+                                                Hệ thống đã hoàn tất việc tóm tắt tin tức.<br/>
+                                                Bạn có thể xem báo cáo hoặc chọn lại tin tức.
+                                            </div>
+                                        </div>
+
+                                        {/* Action Buttons */}
+                                        <div style={{ display: 'flex', gap: '12px' }}>
+                                            <button
+                                                onClick={() => setCurrentStep('summary')}
+                                                style={{
+                                                    padding: '14px 40px',
+                                                    backgroundColor: '#28a745',
+                                                    color: '#ffffff',
+                                                    border: 'none',
+                                                    borderRadius: '8px',
+                                                    fontSize: '16px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.3s ease',
+                                                    boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#218838'
+                                                    e.currentTarget.style.transform = 'translateY(-2px)'
+                                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.4)'
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#28a745'
+                                                    e.currentTarget.style.transform = 'translateY(0)'
+                                                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(40, 167, 69, 0.3)'
+                                                }}
+                                            >
+                                                📊 Xem báo cáo
+                                            </button>
+                                            <button
+                                                onClick={handleResetWithDatabaseCleanup}
+                                                style={{
+                                                    padding: '14px 40px',
+                                                    backgroundColor: '#6c757d',
+                                                    color: '#ffffff',
+                                                    border: 'none',
+                                                    borderRadius: '8px',
+                                                    fontSize: '16px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.3s ease',
+                                                    boxShadow: '0 2px 8px rgba(108, 117, 125, 0.3)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#5a6268'
+                                                    e.currentTarget.style.transform = 'translateY(-2px)'
+                                                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(108, 117, 125, 0.4)'
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = '#6c757d'
+                                                    e.currentTarget.style.transform = 'translateY(0)'
+                                                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.3)'
+                                                }}
+                                            >
+                                                🔄 Chọn lại
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
