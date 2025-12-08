@@ -1358,11 +1358,12 @@ function SelectNews() {
     // Initialize with current month date range (from 1st of current month to today)
     // WITH localStorage persistence to maintain date range across steps
     const today = new Date()
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    const threeWeeksAgo = new Date(today)
+    threeWeeksAgo.setDate(today.getDate() - 21) // 3 weeks = 21 days
 
     const [startDateISO, setStartDateISO] = useState(() => {
         const saved = localStorage.getItem('selectNews_startDateISO')
-        return saved || firstDayOfMonth.toISOString().split('T')[0]
+        return saved || threeWeeksAgo.toISOString().split('T')[0]
     })
     const [endDateISO, setEndDateISO] = useState(() => {
         const saved = localStorage.getItem('selectNews_endDateISO')
