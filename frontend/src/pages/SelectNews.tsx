@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiEndpoint } from '../config/api'
 import { useNotification } from '../contexts/NotificationContext'
+import SummaryPages from './SummaryPages'
 
 // API URL - now uses environment variable for production
 const API_URL = apiEndpoint('api/data')
@@ -31,7 +32,7 @@ interface BaseSummaryItem {
 // Product summary interface
 interface ProductSummaryItem extends BaseSummaryItem {
     product_name: string
-    product_segment: string
+    product_segment: string[]
     bank: string[]
 }
 
@@ -57,10 +58,14 @@ interface NewProductData {
     _id: string
     bank: string | string[]
     product_name: string
-    product_segment?: string
+    product_segment?: string[]
     description?: string
-    image?: string
+    image?: string[]  // Changed to array: image[0] for display, image[1] for backup
     selected: boolean
+    source_of_detail?: string
+    reportSelected?: boolean
+    detail_content?: string
+    url_category_precheck?: string
     date_published: string
     source_type?: string
     source_url?: string
@@ -73,8 +78,12 @@ interface BankingTrendData {
     title: string
     summary?: string
     bank_related: string | string[]
-    image?: string
+    image?: string[]  // Changed to array: image[0] for display, image[1] for backup
     selected: boolean
+    reportSelected?: boolean
+    source_of_detail?: string
+    detail_content?: string
+    url_category_precheck?: string
     source_type?: string
     source_url?: string
     published_date: string
@@ -88,8 +97,12 @@ interface FintechNewsData {
     title: string
     summary?: string
     organization?: string
-    image?: string
+    image?: string[]  // Changed to array: image[0] for display, image[1] for backup
     selected: boolean
+    source_of_detail?: string
+    reportSelected?: boolean
+    detail_content?: string
+    url_category_precheck?: string
     source_type?: string
     source_url?: string
     published_date: string
@@ -98,17 +111,9 @@ interface FintechNewsData {
 
 // Summary Content Component with real data from API
 function SummaryContent({
-    // confirmedNewsCount,
-    onResetWithCleanup,
-    onReportConfirmed,
-    startDateISO,
-    endDateISO
+    confirmedNewsCount
 }: {
-    confirmedNewsCount: number,
-    onResetWithCleanup: () => Promise<void>,
-    onReportConfirmed: () => void,
-    startDateISO: string,
-    endDateISO: string
+    confirmedNewsCount: number
 }) {
     const [expandedItems, setExpandedItems] = useState<Record<string, Set<string>>>({
         'Sản phẩm & Dịch vụ mới': new Set(),
@@ -431,18 +436,20 @@ function SummaryContent({
 
                 const result = await response.json()
                 if (result.success) {
-                    // Update local state
+                    // Update local state with data from backend
+                    // Backend handles the logic: first time sets both image[0] and image[1],
+                    // subsequent times only updates image[0]
                     if (collection === 'new-products') {
                         setNewProducts(prev => prev.map(item =>
-                            item._id === itemId ? { ...item, image: base64Image } : item
+                            item._id === itemId ? result.data : item
                         ))
                     } else if (collection === 'market-trends') {
                         setMarketTrends(prev => prev.map(item =>
-                            item._id === itemId ? { ...item, image: base64Image } : item
+                            item._id === itemId ? result.data : item
                         ))
                     } else if (collection === 'fintech-news') {
                         setFintechNews(prev => prev.map(item =>
-                            item._id === itemId ? { ...item, image: base64Image } : item
+                            item._id === itemId ? result.data : item
                         ))
                     }
                     alert('Đã upload ảnh thành công!')
@@ -560,7 +567,7 @@ function SummaryContent({
                             return (
                                 <article key={item._id} className="news-card">
                                     <div className="news-image" style={{ position: 'relative' }}>
-                                        {item.image ? (
+                                        {(item.image && item.image.length > 0 && item.image[0]) ? (
                                             <div style={{ position: 'relative' }}>
                                                 <div style={{ position: 'relative', cursor: 'pointer' }}
                                                     onClick={() => {
@@ -611,7 +618,7 @@ function SummaryContent({
                                                         }
                                                     }}
                                                 >
-                                                    <img src={item.image} alt={getTitle(item)} style={{ display: 'block', width: '100%' }} />
+                                                    <img src={item.image[0]} alt={getTitle(item)} style={{ display: 'block', width: '100%' }} />
                                                     <div
                                                         data-overlay
                                                         style={{
@@ -1217,129 +1224,81 @@ function SummaryContent({
                 </div>
             ))}
 
-            {/* Nút xem chi tiết tại trang Quản lý */}
-            <div style={{
-                marginTop: '48px',
-                paddingTop: '32px',
-                borderTop: '2px solid #e9ecef',
-                display: 'flex',
-                justifyContent: 'center',
-                gap: '16px',
-                alignItems: 'center'
-            }}>
-                {pendingSelectionChanges.size > 0 && (
-                    <div style={{
-                        padding: '12px 20px',
-                        backgroundColor: '#fff3cd',
-                        color: '#856404',
-                        border: '1px solid #ffeeba',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        fontWeight: '600'
-                    }}>
-                        {pendingSelectionChanges.size} thay đổi chưa lưu
-                    </div>
-                )}
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                    <button
-                        onClick={onResetWithCleanup}
-                        style={{
-                            padding: '16px 40px',
-                            backgroundColor: '#6c757d',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontSize: '16px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s ease',
-                            boxShadow: '0 2px 8px rgba(108, 117, 125, 0.3)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#5a6268'
-                            e.currentTarget.style.transform = 'translateY(-2px)'
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(108, 117, 125, 0.4)'
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#6c757d'
-                            e.currentTarget.style.transform = 'translateY(0)'
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.3)'
-                        }}
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="1 4 1 10 7 10" />
-                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                        </svg>
-                        Chọn lại
-                    </button>
-                    <button
-                        onClick={async () => {
-                            try {
-                                // Save pending changes first
-                                await handleSaveSelectionChanges()
-
-                                // Create report with selected items
-                                const response = await fetch(apiEndpoint('api/reports/create'), {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        startDate: startDateISO,
-                                        endDate: endDateISO
-                                    })
-                                })
-
-                                const result = await response.json()
-
-                                if (result.success) {
-                                    alert(`Báo cáo đã được tạo thành công!\nTổng số tin: ${result.report.totalItems}\nKhoảng thời gian: ${result.report.dateRange}`)
-                                    // Call parent function to reset and navigate to Adjust page
-                                    onReportConfirmed()
-                                } else {
-                                    alert('Có lỗi xảy ra khi tạo báo cáo: ' + (result.error || 'Unknown error'))
-                                }
-                            } catch (error) {
-                                console.error('Error creating report:', error)
-                                alert('Có lỗi xảy ra khi tạo báo cáo!')
-                            }
-                        }}
-                        style={{
-                            padding: '16px 40px',
-                            backgroundColor: '#F00020',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontSize: '16px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s ease',
-                            boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#c00018'
-                            e.currentTarget.style.transform = 'translateY(-2px)'
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '#F00020'
-                            e.currentTarget.style.transform = 'translateY(0)'
-                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
-                        }}
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M9 11l3 3L22 4" />
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                        </svg>
-                        Xác nhận báo cáo
-                    </button>
-                </div>
-            </div>
         </div>
+    )
+}
+
+// Wrapper component to fetch data and pass to SummaryPages
+function SummaryPagesWrapper({
+    onResetWithCleanup,
+    onReportConfirmed,
+    startDateISO,
+    endDateISO,
+    confirmedNewsCount
+}: {
+    onResetWithCleanup: () => Promise<void>
+    onReportConfirmed: () => void
+    startDateISO: string
+    endDateISO: string
+    confirmedNewsCount: number
+}) {
+    const [newProducts, setNewProducts] = useState<NewProductData[]>([])
+    const [bankingTrends, setBankingTrends] = useState<BankingTrendData[]>([])
+    const [fintechNews, setFintechNews] = useState<FintechNewsData[]>([])
+    const [loading, setLoading] = useState(true)
+
+    // Fetch selected items from API
+    useEffect(() => {
+        const fetchSummaryData = async () => {
+            try {
+                setLoading(true)
+                const response = await fetch(apiEndpoint('api/data/summary-selected'))
+                const result = await response.json()
+
+                console.log('SummaryPagesWrapper - API Response:', result)
+
+                if (result.success) {
+                    const products = result.data.newProducts || []
+                    const trends = result.data.marketTrends || []
+                    const news = result.data.fintechNews || []
+
+                    console.log('SummaryPagesWrapper - Setting newProducts:', products)
+                    console.log('SummaryPagesWrapper - Setting bankingTrends:', trends)
+                    console.log('SummaryPagesWrapper - Setting fintechNews:', news)
+
+                    setNewProducts(products)
+                    setBankingTrends(trends)
+                    setFintechNews(news)
+                }
+            } catch (error) {
+                console.error('Error fetching summary data:', error)
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchSummaryData()
+    }, [])
+
+    if (loading) {
+        return <div>Đang tải dữ liệu...</div>
+    }
+
+    return (
+        <SummaryPages
+            onResetWithCleanup={onResetWithCleanup}
+            onReportConfirmed={onReportConfirmed}
+            startDateISO={startDateISO}
+            endDateISO={endDateISO}
+            newProducts={newProducts}
+            bankingTrends={bankingTrends}
+            fintechNews={fintechNews}
+            page1Content={
+                <SummaryContent
+                    confirmedNewsCount={confirmedNewsCount}
+                />
+            }
+        />
     )
 }
 
@@ -1974,20 +1933,21 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                         marginBottom: '32px'
                     }}>
                         <h1 style={{ margin: 0, fontSize: '28px', color: '#2c3e50' }}>
-                            📊 Tóm Tắt Tin Tức
+                            {/* 📊  */}
+                            Bảng tin sản phẩm dịch vụ và tin tức thị trường ngân hàng & Fintech
                         </h1>
-                        <p style={{ margin: '8px 0 0 0', color: '#6c757d', fontSize: '14px' }}>
+                        {/* <p style={{ margin: '8px 0 0 0', color: '#6c757d', fontSize: '14px' }}>
                             Tóm tắt {confirmedNews.length} tin tức ưu tiên
-                        </p>
+                        </p> */}
                     </div>
 
-                    {/* Content area for summary step - Mocked data theo 3 categories */}
-                    <SummaryContent
-                        confirmedNewsCount={confirmedNews.length}
+                    {/* Content area for summary step - Now with 4-page pagination */}
+                    <SummaryPagesWrapper
                         onResetWithCleanup={handleResetWithDatabaseCleanup}
                         onReportConfirmed={handleReportConfirmed}
                         startDateISO={startDateISO}
                         endDateISO={endDateISO}
+                        confirmedNewsCount={confirmedNews.length}
                     />
                 </div>
             </div>

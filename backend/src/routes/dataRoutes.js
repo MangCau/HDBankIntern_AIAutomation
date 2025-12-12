@@ -6,6 +6,7 @@ const NewProductService = require('../models/NewProductService');
 const BankingMarketTrend = require('../models/BankingMarketTrend');
 const FintechNews = require('../models/FintechNews');
 const HeaderProcessing = require('../models/HeaderProcessing');
+const { crawlContent } = require('../services/crawlerService');
 
 // Middleware to check database connection
 const checkDbConnection = (req, res, next) => {
@@ -164,9 +165,30 @@ router.patch('/update-image/:collection/:id', checkDbConnection, async (req, res
         return res.status(400).json({ success: false, message: 'Invalid collection' });
     }
 
+    // For all collections with image arrays:
+    // - First time (image[1] doesn't exist): set both image[0] and image[1]
+    // - Subsequent times: only update image[0], keep image[1] unchanged
+    let updateData;
+    const item = await Model.findById(id);
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Item not found' });
+    }
+
+    // Check if this is first time (image[1] doesn't exist or is empty)
+    // Also check if image is not an array (old data format)
+    const isFirstTime = !item.image || !Array.isArray(item.image) || item.image.length < 2 || !item.image[1];
+
+    if (isFirstTime) {
+      // First time: set both image[0] and image[1]
+      updateData = { image: [image, image] };
+    } else {
+      // Subsequent times: only update image[0], keep image[1]
+      updateData = { image: [image, item.image[1]] };
+    }
+
     const updated = await Model.findByIdAndUpdate(
       id,
-      { image },
+      updateData,
       { new: true }
     );
 
@@ -187,7 +209,7 @@ router.patch('/update-field/:collection/:id', checkDbConnection, async (req, res
     const { field, value } = req.body;
 
     // Validate field and value are provided
-    if (!field || value === undefined || value === null) {
+    if (!field || value === undefined) {
       return res.status(400).json({ success: false, message: 'Field and value are required' });
     }
 
@@ -197,15 +219,15 @@ router.patch('/update-field/:collection/:id', checkDbConnection, async (req, res
     switch (collection) {
       case 'new-products':
         Model = NewProductService;
-        allowedFields = ['product_name', 'description', 'selected'];
+        allowedFields = ['product_name', 'description', 'selected', 'reportSelected', 'source_of_detail', 'detail_content', 'url_category_precheck'];
         break;
       case 'market-trends':
         Model = BankingMarketTrend;
-        allowedFields = ['title', 'summary', 'selected'];
+        allowedFields = ['title', 'summary', 'selected', 'reportSelected', 'source_of_detail', 'detail_content', 'url_category_precheck'];
         break;
       case 'fintech-news':
         Model = FintechNews;
-        allowedFields = ['title', 'summary', 'selected'];
+        allowedFields = ['title', 'summary', 'selected', 'reportSelected', 'source_of_detail', 'detail_content', 'url_category_precheck'];
         break;
       case 'header-processing':
         Model = HeaderProcessing;
@@ -319,9 +341,47 @@ Nội dung chữ: chỉ cần tiêu đề ngắn gọn`;
     const base64Image = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
 
     // Update the item with the generated image
+    // For all collections with image arrays:
+    // - First time (image[1] doesn't exist): set both image[0] and image[1]
+    // - Subsequent times: only update image[0], keep image[1] unchanged
+
+    // DEBUG LOGGING
+    console.log('=== IMAGE GENERATION DEBUG ===');
+    console.log('Item ID:', id);
+    console.log('Current item.image:', item.image);
+    console.log('Is item.image an array?', Array.isArray(item.image));
+    console.log('item.image type:', typeof item.image);
+    if (item.image) {
+      console.log('item.image.length:', item.image.length);
+      if (Array.isArray(item.image)) {
+        console.log('item.image[0]:', item.image[0] ? item.image[0].substring(0, 50) + '...' : 'null');
+        console.log('item.image[1]:', item.image[1] ? item.image[1].substring(0, 50) + '...' : 'null');
+      }
+    }
+
+    let updateData;
+    // Check if this is first time (image[1] doesn't exist or is empty)
+    // Also check if image is not an array (old data format)
+    const isFirstTime = !item.image || !Array.isArray(item.image) || item.image.length < 2 || !item.image[1];
+
+    console.log('Is first time?', isFirstTime);
+
+    if (isFirstTime) {
+      // First time: set both image[0] and image[1]
+      updateData = { image: [base64Image, base64Image] };
+      console.log('Setting both image[0] and image[1] to new image');
+    } else {
+      // Subsequent times: only update image[0], keep image[1]
+      updateData = { image: [base64Image, item.image[1]] };
+      console.log('Updating only image[0], keeping image[1]');
+    }
+
+    console.log('Update data structure:', { image: Array.isArray(updateData.image) ? '[Array]' : typeof updateData.image });
+    console.log('=== END DEBUG ===');
+
     const updated = await Model.findByIdAndUpdate(
       id,
-      { image: base64Image },
+      updateData,
       { new: true }
     );
 
@@ -344,6 +404,93 @@ Nội dung chữ: chỉ cần tiêu đề ngắn gọn`;
       details: error.response?.data,
       statusCode: error.response?.status
     });
+  }
+});
+
+// Auto-crawl content for item with null detail_content
+router.post('/crawl-content/:collection/:id', checkDbConnection, async (req, res) => {
+  try {
+    const { collection, id } = req.params;
+
+    // Determine which model to use
+    let Model;
+    switch (collection) {
+      case 'new-products':
+        Model = NewProductService;
+        break;
+      case 'market-trends':
+        Model = BankingMarketTrend;
+        break;
+      case 'fintech-news':
+        Model = FintechNews;
+        break;
+      default:
+        return res.status(400).json({ success: false, message: 'Invalid collection' });
+    }
+
+    // Find the item
+    const item = await Model.findById(id);
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Item not found' });
+    }
+
+    // Không cần check detail_content - cho phép crawl lại bất cứ lúc nào
+    // User có thể muốn crawl lại để cập nhật nội dung mới
+
+    // Check if source_url exists
+    if (!item.source_url) {
+      return res.status(400).json({
+        success: false,
+        message: 'source_url is required for crawling'
+      });
+    }
+
+    // Check url_category_precheck
+    const category = item.url_category_precheck;
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        message: 'url_category_precheck is required'
+      });
+    }
+
+    console.log(`\n🔄 Auto-crawling content for ${collection}/${id}`);
+    console.log(`📍 URL: ${item.source_url}`);
+    console.log(`🏷️  Category: ${category}`);
+
+    // Crawl content based on category
+    let crawledContent = '';
+
+    try {
+      crawledContent = await crawlContent(item.source_url, category);
+    } catch (crawlError) {
+      console.error('❌ Crawl error:', crawlError.message);
+      return res.status(500).json({
+        success: false,
+        message: `Crawl failed: ${crawlError.message}`,
+        category: category
+      });
+    }
+
+    // Update detail_content in database
+    item.detail_content = crawledContent;
+    await item.save();
+
+    console.log('✅ Content crawled and saved successfully');
+
+    res.json({
+      success: true,
+      message: 'Content crawled successfully',
+      data: {
+        id: item._id,
+        contentLength: crawledContent.length,
+        category: category
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error in crawl-content endpoint:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 

@@ -1,0 +1,1431 @@
+import { useState, useEffect } from 'react'
+
+// Interface for NewProductService data
+interface NewProductData {
+    _id: string
+    bank: string | string[]
+    product_name: string
+    product_segment?: string[]
+    description?: string
+    image?: string[]  // Changed to array: image[0] for display, image[1] for backup
+    selected: boolean
+    source_of_detail?: string
+    reportSelected?: boolean
+    detail_content?: string
+    url_category_precheck?: string
+    date_published: string
+    source_type?: string
+    source_url?: string
+    pdf_file_name?: string
+}
+
+// Interface for BankingMarketTrend data
+interface BankingTrendData {
+    _id: string
+    topic_group?: string
+    title: string
+    summary?: string
+    bank_related: string | string[]
+    image?: string[]
+    selected: boolean
+    reportSelected?: boolean
+    source_of_detail?: string
+    detail_content?: string
+    url_category_precheck?: string
+    source_type?: string
+    source_url?: string
+    published_date: string
+    pdf_file_name?: string
+}
+
+// Interface for FintechNews data
+interface FintechNewsData {
+    _id: string
+    fintech_topic?: string
+    area_affected: string | string[]
+    title: string
+    summary?: string
+    organization?: string
+    image?: string[]
+    selected: boolean
+    source_of_detail?: string
+    reportSelected?: boolean
+    detail_content?: string
+    url_category_precheck?: string
+    source_type?: string
+    source_url?: string
+    published_date: string
+    pdf_file_name?: string
+}
+
+interface SummaryPagesProps {
+    onResetWithCleanup: () => Promise<void>
+    onReportConfirmed: () => void
+    startDateISO: string
+    endDateISO: string
+    // Page 1 content - existing summary content from parent
+    page1Content: React.ReactNode
+    // New products data for Page 2
+    newProducts: NewProductData[]
+    // Banking trends data for Page 3
+    bankingTrends: BankingTrendData[]
+    // Fintech news data for Page 4
+    fintechNews: FintechNewsData[]
+}
+
+
+function SummaryPages({
+    onResetWithCleanup,
+    onReportConfirmed,
+    startDateISO,
+    endDateISO,
+    page1Content,
+    newProducts,
+    bankingTrends,
+    fintechNews
+}: SummaryPagesProps) {
+    const [currentMainPage, setCurrentMainPage] = useState(1)
+    // State for editing detail content
+    const [editingProductId, setEditingProductId] = useState<string | null>(null)
+    const [editingTrendId, setEditingTrendId] = useState<string | null>(null)
+    const [editingNewsId, setEditingNewsId] = useState<string | null>(null)
+    const [editedContent, setEditedContent] = useState<string>('')
+    const [crawlUrls, setCrawlUrls] = useState<Record<string, string>>({})
+    const [crawlingIds, setCrawlingIds] = useState<Set<string>>(new Set()) // Track which items are being crawled
+
+    // State for responsive design
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+
+    // Effect to handle window resize
+    useEffect(() => {
+        const handleResize = () => {
+            setWindowWidth(window.innerWidth)
+        }
+
+        // Set initial width
+        handleResize()
+
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+    }, [])
+
+    // Filter selected items
+    const selectedProducts = newProducts.filter(product => product.selected)
+    const selectedBankingTrends = bankingTrends.filter(trend => trend.selected)
+    const selectedFintechNews = fintechNews.filter(news => news.selected)
+
+    // Handle update detail content for products
+    const handleUpdateDetailContent = async (productId: string) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/data/update-field/new-products/${productId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    field: 'detail_content',
+                    value: editedContent
+                })
+            })
+
+            const result = await response.json()
+            if (result.success) {
+                alert('Cập nhật thành công!')
+                setEditingProductId(null)
+                window.location.reload()
+            } else {
+                alert('Lỗi: ' + result.message)
+            }
+        } catch (error) {
+            console.error('Error updating detail content:', error)
+            alert('Có lỗi xảy ra khi cập nhật')
+        }
+    }
+
+    // Handle update detail content for banking trends
+    const handleUpdateBankingTrendContent = async (trendId: string) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/data/update-field/market-trends/${trendId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    field: 'detail_content',
+                    value: editedContent
+                })
+            })
+
+            const result = await response.json()
+            if (result.success) {
+                alert('Cập nhật thành công!')
+                setEditingTrendId(null)
+                window.location.reload()
+            } else {
+                alert('Lỗi: ' + result.message)
+            }
+        } catch (error) {
+            console.error('Error updating detail content:', error)
+            alert('Có lỗi xảy ra khi cập nhật')
+        }
+    }
+
+    // Handle update detail content for fintech news
+    const handleUpdateFintechNewsContent = async (newsId: string) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/data/update-field/fintech-news/${newsId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    field: 'detail_content',
+                    value: editedContent
+                })
+            })
+
+            const result = await response.json()
+            if (result.success) {
+                alert('Cập nhật thành công!')
+                setEditingNewsId(null)
+                window.location.reload()
+            } else {
+                alert('Lỗi: ' + result.message)
+            }
+        } catch (error) {
+            console.error('Error updating detail content:', error)
+            alert('Có lỗi xảy ra khi cập nhật')
+        }
+    }
+
+    // Auto-crawl content when detail_content is null
+    const handleAutoCrawl = async (itemId: string, collection: string) => {
+        setCrawlingIds(prev => new Set(prev).add(itemId))
+
+        try {
+            const response = await fetch(`http://localhost:5000/api/data/crawl-content/${collection}/${itemId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const result = await response.json()
+
+            if (result.success) {
+                alert(`Crawl thành công! Đã lấy được ${result.data.contentLength} ký tự`)
+                window.location.reload()
+            } else {
+                alert('Lỗi crawl: ' + result.message)
+            }
+        } catch (error) {
+            console.error('Error crawling content:', error)
+            alert('Có lỗi xảy ra khi crawl')
+        } finally {
+            setCrawlingIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(itemId)
+                return newSet
+            })
+        }
+    }
+
+    // Render Page Navigation
+    const renderPageNavigation = () => (
+        <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '16px',
+            marginTop: '32px',
+            paddingTop: '24px',
+            borderTop: '2px solid #e9ecef'
+        }}>
+            {currentMainPage > 1 && (
+                <button
+                    onClick={() => setCurrentMainPage(currentMainPage - 1)}
+                    style={{
+                        padding: '12px 32px',
+                        backgroundColor: '#FFD643',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#fecf27ff'
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#FFD643'
+                        e.currentTarget.style.transform = 'translateY(0)'
+                    }}
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                    Trang trước
+                </button>
+            )}
+
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                fontSize: '15px',
+                fontWeight: '600',
+                color: '#2c3e50'
+            }}>
+                <span>Trang {currentMainPage} / 4</span>
+            </div>
+
+            {currentMainPage < 4 && (
+                <button
+                    onClick={() => setCurrentMainPage(currentMainPage + 1)}
+                    style={{
+                        padding: '12px 32px',
+                        backgroundColor: '#F00020',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#c00018'
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#F00020'
+                        e.currentTarget.style.transform = 'translateY(0)'
+                    }}
+                >
+                    Trang sau
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                </button>
+            )}
+        </div>
+    )
+
+    // Render Page 2: Product Table
+    const renderPage2ProductTable = () => {
+        // Check if there are no selected products
+        if (selectedProducts.length === 0) {
+            return (
+                <div style={{
+                    marginBottom: '32px',
+                    padding: '40px',
+                    textAlign: 'center',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '8px',
+                    border: '1px solid #dee2e6'
+                }}>
+                    <p style={{ fontSize: '16px', color: '#6c757d', margin: 0 }}>
+                        Không có sản phẩm/dịch vụ nào được chọn.
+                    </p>
+                    <p style={{ fontSize: '14px', color: '#adb5bd', margin: '8px 0 0 0' }}>
+                        Tổng số sản phẩm: {newProducts.length}
+                    </p>
+                </div>
+            )
+        }
+
+        // Extract unique banks from selected products
+        const uniqueBanks = Array.from(new Set(
+            selectedProducts.map(p => Array.isArray(p.bank) ? p.bank.join(', ') : p.bank)
+        )).filter(Boolean)
+
+        // Group products by level 1 category (product_segment[0])
+        const productsByCategory: Record<string, Array<{
+            level2: string
+            banks: string[]
+        }>> = {}
+
+        selectedProducts.forEach(product => {
+            if (product.product_segment && product.product_segment.length >= 2) {
+                const level1 = product.product_segment[0]
+                const level2 = product.product_segment[1]
+                const bankName = Array.isArray(product.bank) ? product.bank.join(', ') : product.bank
+
+                if (!productsByCategory[level1]) {
+                    productsByCategory[level1] = []
+                }
+
+                // Check if level2 already exists in this category
+                const existingLevel2 = productsByCategory[level1].find(item => item.level2 === level2)
+                if (existingLevel2) {
+                    if (!existingLevel2.banks.includes(bankName)) {
+                        existingLevel2.banks.push(bankName)
+                    }
+                } else {
+                    productsByCategory[level1].push({
+                        level2,
+                        banks: [bankName]
+                    })
+                }
+            }
+        })
+
+        return (
+            <div style={{ marginBottom: '32px' }}>
+                {/* Product Comparison Table - Responsive with scaling */}
+                {windowWidth >= 480 ? (
+                <div style={{
+                    overflowX: 'auto',
+                    marginBottom: '32px',
+                    border: '2px solid #F00020',
+                    borderRadius: '8px',
+                    WebkitOverflowScrolling: 'touch'
+                }}>
+                    <table style={{
+                        width: '100%',
+                        borderCollapse: 'collapse',
+                        backgroundColor: '#ffffff',
+                        minWidth: windowWidth < 640 ? '500px' : '600px',
+                        fontSize: windowWidth < 640 ? '11px' : windowWidth < 768 ? '12px' : '14px'
+                    }}>
+                        <thead>
+                            <tr style={{ backgroundColor: '#F00020' }}>
+                                <th style={{
+                                    padding: windowWidth < 640 ? '8px' : windowWidth < 768 ? '12px' : '16px',
+                                    textAlign: 'left',
+                                    color: '#ffffff',
+                                    fontWeight: '700',
+                                    fontSize: windowWidth < 640 ? '11px' : windowWidth < 768 ? '12px' : '14px',
+                                    borderRight: '1px solid rgba(255,255,255,0.2)',
+                                    minWidth: windowWidth < 640 ? '140px' : windowWidth < 768 ? '180px' : '250px'
+                                }}>
+                                    Sản phẩm / Dịch vụ
+                                </th>
+                                {uniqueBanks.map(bank => (
+                                    <th key={bank} style={{
+                                        padding: windowWidth < 640 ? '8px 4px' : windowWidth < 768 ? '10px 8px' : '16px',
+                                        textAlign: 'center',
+                                        color: '#ffffff',
+                                        fontWeight: '700',
+                                        fontSize: windowWidth < 640 ? '10px' : windowWidth < 768 ? '11px' : '14px',
+                                        borderRight: '1px solid rgba(255,255,255,0.2)',
+                                        minWidth: windowWidth < 640 ? '60px' : windowWidth < 768 ? '75px' : '100px'
+                                    }}>
+                                        {bank}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Object.entries(productsByCategory).map(([level1, level2Items], catIndex) => (
+                                <>
+                                    {/* Level 1 Row */}
+                                    <tr key={`cat-${catIndex}`} style={{ backgroundColor: '#FFF9E6' }}>
+                                        <td colSpan={uniqueBanks.length + 1} style={{
+                                            padding: windowWidth < 640 ? '8px 12px' : windowWidth < 768 ? '10px 14px' : '12px 16px',
+                                            fontWeight: '700',
+                                            fontSize: windowWidth < 640 ? '12px' : windowWidth < 768 ? '13px' : '15px',
+                                            color: '#2c3e50',
+                                            borderBottom: '1px solid #dee2e6'
+                                        }}>
+                                            {level1}
+                                        </td>
+                                    </tr>
+                                    {/* Level 2 Rows */}
+                                    {level2Items.map((item, itemIndex) => (
+                                        <tr key={`item-${catIndex}-${itemIndex}`} style={{
+                                            backgroundColor: itemIndex % 2 === 0 ? '#ffffff' : '#f8f9fa',
+                                            borderBottom: '1px solid #dee2e6'
+                                        }}>
+                                            <td style={{
+                                                padding: windowWidth < 640 ? '8px' : windowWidth < 768 ? '10px 12px' : '12px 16px',
+                                                fontSize: windowWidth < 640 ? '11px' : windowWidth < 768 ? '12px' : '14px',
+                                                color: '#0066cc',
+                                                paddingLeft: windowWidth < 640 ? '16px' : windowWidth < 768 ? '24px' : '32px',
+                                                borderRight: '1px solid #dee2e6'
+                                            }}>
+                                                {item.level2}
+                                            </td>
+                                            {uniqueBanks.map(bank => (
+                                                <td key={bank} style={{
+                                                    padding: windowWidth < 640 ? '8px 4px' : windowWidth < 768 ? '10px 8px' : '12px 16px',
+                                                    textAlign: 'center',
+                                                    borderRight: '1px solid #dee2e6'
+                                                }}>
+                                                    {item.banks.includes(bank) && (
+                                                        <span style={{
+                                                            color: '#28a745',
+                                                            fontSize: windowWidth < 640 ? '16px' : windowWidth < 768 ? '18px' : '20px',
+                                                            fontWeight: 'bold'
+                                                        }}>✓</span>
+                                                    )}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                ) : (
+                /* Product Comparison - Mobile Card View */
+                <div style={{ marginBottom: '32px' }}>
+                    {Object.entries(productsByCategory).map(([level1, level2Items], catIndex) => (
+                        <div key={`mobile-cat-${catIndex}`} style={{ marginBottom: '24px' }}>
+                            {/* Category Header */}
+                            <div style={{
+                                backgroundColor: '#F00020',
+                                color: '#ffffff',
+                                padding: '12px 16px',
+                                fontWeight: '700',
+                                fontSize: '14px',
+                                borderRadius: '8px 8px 0 0'
+                            }}>
+                                {level1}
+                            </div>
+
+                            {/* Products in this category */}
+                            {level2Items.map((item, itemIndex) => (
+                                <div key={`mobile-item-${catIndex}-${itemIndex}`} style={{
+                                    border: '1px solid #dee2e6',
+                                    borderTop: itemIndex === 0 ? 'none' : '1px solid #dee2e6',
+                                    padding: '12px 16px',
+                                    backgroundColor: '#ffffff'
+                                }}>
+                                    <div style={{
+                                        fontWeight: '600',
+                                        fontSize: '13px',
+                                        color: '#0066cc',
+                                        marginBottom: '8px'
+                                    }}>
+                                        {item.level2}
+                                    </div>
+                                    <div style={{
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        gap: '8px'
+                                    }}>
+                                        {item.banks.map(bank => (
+                                            <span key={bank} style={{
+                                                backgroundColor: '#28a745',
+                                                color: '#ffffff',
+                                                padding: '4px 12px',
+                                                borderRadius: '12px',
+                                                fontSize: '11px',
+                                                fontWeight: '600'
+                                            }}>
+                                                {bank}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+                )}
+
+                {/* Summary List */}
+                <div style={{
+                    backgroundColor: '#f8f9fa',
+                    border: '1px solid #dee2e6',
+                    borderRadius: '8px',
+                    padding: windowWidth < 768 ? '16px' : '24px',
+                    marginBottom: '32px'
+                }}>
+                    <h3 style={{
+                        fontSize: windowWidth < 768 ? '16px' : '18px',
+                        fontWeight: '700',
+                        color: '#2c3e50',
+                        marginBottom: '16px',
+                        borderBottom: '2px solid #F00020',
+                        paddingBottom: '8px'
+                    }}>
+                       Nội dung tóm tắt
+                    </h3>
+                    <ul style={{
+                        margin: 0,
+                        paddingLeft: windowWidth < 768 ? '16px' : '20px',
+                        color: '#495057',
+                        lineHeight: '1.8'
+                    }}>
+                        {selectedProducts.map((product) => (
+                            <li key={product._id} style={{
+                                marginBottom: '8px',
+                                fontSize: windowWidth < 768 ? '13px' : '14px'
+                            }}>
+                                {product.description || 'Không có mô tả'}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* Content Cards - Display real data with image[1] */}
+                {selectedProducts.map((product) => (
+                <div key={product._id} style={{
+                    border: '1px solid #dee2e6',
+                    borderRadius: '8px',
+                    marginBottom: '24px',
+                    overflow: 'hidden',
+                    backgroundColor: '#ffffff'
+                }}>
+                    {/* Header */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: windowWidth < 640 ? '1fr' : 'minmax(150px, 200px) 1fr',
+                        borderBottom: '1px solid #dee2e6'
+                    }}>
+                        <div style={{
+                            padding: '16px 20px',
+                            fontWeight: '700',
+                            fontSize: '14px',
+                            color: '#2c3e50',
+                            textAlign: 'center',
+                            backgroundColor: '#fff3c5ff',
+                            borderRight: windowWidth < 640 ? 'none' : '1px solid #dee2e6',
+                            borderBottom: windowWidth < 640 ? '1px solid #dee2e6' : 'none'
+                        }}>
+                            Sản phẩm/Dịch vụ
+                        </div>
+                        <div style={{
+                            padding: '16px 20px',
+                            fontWeight: '700',
+                            fontSize: '14px',
+                            color: '#2c3e50',
+                            textAlign: 'center',
+                            backgroundColor: '#c4cfffff'
+                        }}>
+                            {product.product_name}
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: windowWidth < 768 ? 'column' : 'row'
+                    }}>
+                        {/* Image Section */}
+                        <div style={{
+                            width: windowWidth < 768 ? '100%' : '200px',
+                            minWidth: windowWidth < 768 ? 'auto' : '200px',
+                            padding: '20px',
+                            borderRight: windowWidth < 768 ? 'none' : '1px solid #dee2e6',
+                            borderBottom: windowWidth < 768 ? '1px solid #dee2e6' : 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            {(product.image && product.image.length > 1 && product.image[1]) ? (
+                                <img src={product.image[1]} alt={product.product_name}
+                                    style={{
+                                        maxWidth: '100%',
+                                        maxHeight: '200px',
+                                        display: 'block',
+                                        borderRadius: '6px'
+                                    }}
+                                />
+                            ) : (
+                                <div style={{
+                                    width: '100%',
+                                    height: '150px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    backgroundColor: '#f8f9fa',
+                                    borderRadius: '6px',
+                                    color: '#adb5bd',
+                                    fontSize: '14px'
+                                }}>
+                                    Chưa có ảnh
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Detail Section */}
+                        <div style={{
+                            flex: 1,
+                            padding: '20px',
+                            fontSize: '14px',
+                            color: '#495057',
+                            lineHeight: '1.8',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            minHeight: 0
+                        }}>
+                                    {/* Crawl URL input and buttons */}
+                                    <div style={{
+                                        marginBottom: '16px',
+                                        padding: '12px',
+                                        backgroundColor: '#f8f9fa',
+                                        borderRadius: '6px',
+                                        border: '1px solid #dee2e6'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            flexDirection: windowWidth < 640 ? 'column' : 'row',
+                                            gap: '8px',
+                                            alignItems: windowWidth < 640 ? 'stretch' : 'center',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <input
+                                                type="text"
+                                                placeholder="Nhập link để crawl..."
+                                                value={crawlUrls[product._id] || ''}
+                                                onChange={(e) => setCrawlUrls({ ...crawlUrls, [product._id]: e.target.value })}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px 12px',
+                                                    border: '1px solid #ced4da',
+                                                    borderRadius: '4px',
+                                                    fontSize: '13px',
+                                                    minWidth: windowWidth < 640 ? 'auto' : '200px'
+                                                }}
+                                            />
+                                            <div style={{
+                                                display: 'flex',
+                                                gap: '8px',
+                                                flexShrink: 0
+                                            }}>
+                                                <button
+                                                    onClick={() => {
+                                                        // TODO: Implement crawl logic
+                                                        alert('Tính năng Crawl sẽ được hiện thực sau')
+                                                    }}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#007bff',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer',
+                                                        whiteSpace: 'nowrap',
+                                                        flex: windowWidth < 640 ? 1 : 'initial'
+                                                    }}
+                                                >
+                                                    Crawl
+                                                </button>
+                                                <button
+                                                    onClick={() => handleAutoCrawl(product._id, 'new-products')}
+                                                    disabled={crawlingIds.has(product._id)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: crawlingIds.has(product._id) ? '#adb5bd' : '#6c757d',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: crawlingIds.has(product._id) ? 'not-allowed' : 'pointer',
+                                                        whiteSpace: 'nowrap',
+                                                        flex: windowWidth < 640 ? 1 : 'initial',
+                                                        opacity: crawlingIds.has(product._id) ? 0.6 : 1
+                                                    }}
+                                                >
+                                                    {crawlingIds.has(product._id) ? '⏳ Đang crawl...' : 'Lấy nội dung cũ'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Editable content area */}
+                                    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                    {editingProductId === product._id ? (
+                                        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                            <textarea
+                                                value={editedContent}
+                                                onChange={(e) => setEditedContent(e.target.value)}
+                                                style={{
+                                                    width: '100%',
+                                                    minHeight: '200px',
+                                                    padding: '12px',
+                                                    border: '1px solid #ced4da',
+                                                    borderRadius: '4px',
+                                                    fontSize: '14px',
+                                                    lineHeight: '1.8',
+                                                    fontFamily: 'inherit',
+                                                    resize: 'vertical'
+                                                }}
+                                            />
+                                            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                                <button
+                                                    onClick={() => handleUpdateDetailContent(product._id)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#28a745',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Lưu
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditingProductId(null)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#dc3545',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Hủy
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <div style={{
+                                                marginBottom: '8px',
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                                overflowWrap: 'anywhere',
+                                                maxHeight: '400px',
+                                                overflowY: 'auto',
+                                                overflowX: 'auto',
+                                                padding: '8px',
+                                                backgroundColor: '#f8f9fa',
+                                                borderRadius: '4px',
+                                                border: '1px solid #dee2e6',
+                                                width: '100%',
+                                                boxSizing: 'border-box'
+                                            }}>
+                                                {product.detail_content || 'Chưa có nội dung chi tiết'}
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingProductId(product._id)
+                                                    setEditedContent(product.detail_content || '')
+                                                }}
+                                                style={{
+                                                    padding: '6px 12px',
+                                                    backgroundColor: '#ffc107',
+                                                    color: '#000000',
+                                                    border: 'none',
+                                                    borderRadius: '4px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Chỉnh sửa
+                                            </button>
+                                        </div>
+                                    )}
+                                    </div>
+                        </div>
+                    </div>
+                </div>
+                ))}
+            </div>
+        )
+    }
+
+    // Render Page 3: Banking Market Trends
+    const renderPage3BankingTrends = () => (
+        <div style={{ marginBottom: '32px' }}>
+            {selectedBankingTrends.map((trend) => (
+                <div key={trend._id} style={{
+                    border: '1px solid #dee2e6',
+                    borderRadius: '8px',
+                    marginBottom: '24px',
+                    overflow: 'hidden',
+                    backgroundColor: '#ffffff'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: windowWidth < 768 ? 'column' : 'row'
+                    }}>
+                        <div style={{
+                            width: windowWidth < 768 ? '100%' : '200px',
+                            minWidth: windowWidth < 768 ? 'auto' : '200px',
+                            padding: '20px',
+                            backgroundColor: '#fff3c5ff',
+                            borderRight: windowWidth < 768 ? 'none' : '1px solid #dee2e6',
+                            borderBottom: windowWidth < 768 ? '1px solid #dee2e6' : 'none',
+                            fontWeight: '700',
+                            fontSize: '14px',
+                            color: '#2c3e50',
+                            textAlign: 'center',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            {trend.topic_group || 'N/A'}
+                        </div>
+                        <div style={{
+                            flex: 1,
+                            padding: '20px',
+                            fontSize: '14px',
+                            color: '#495057',
+                            lineHeight: '1.8',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            minHeight: 0
+                        }}>
+                            <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '700', color: '#2c3e50' }}>
+                                {trend.title}
+                            </h4>
+
+                                    {/* Crawl URL input and buttons */}
+                                    <div style={{
+                                        marginBottom: '16px',
+                                        padding: '12px',
+                                        backgroundColor: '#f8f9fa',
+                                        borderRadius: '6px',
+                                        border: '1px solid #dee2e6'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            flexDirection: windowWidth < 640 ? 'column' : 'row',
+                                            gap: '8px',
+                                            alignItems: windowWidth < 640 ? 'stretch' : 'center',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <input
+                                                type="text"
+                                                placeholder="Nhập link để crawl..."
+                                                value={crawlUrls[trend._id] || ''}
+                                                onChange={(e) => setCrawlUrls({ ...crawlUrls, [trend._id]: e.target.value })}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px 12px',
+                                                    border: '1px solid #ced4da',
+                                                    borderRadius: '4px',
+                                                    fontSize: '13px',
+                                                    minWidth: windowWidth < 640 ? 'auto' : '200px'
+                                                }}
+                                            />
+                                            <div style={{
+                                                display: 'flex',
+                                                gap: '8px',
+                                                flexShrink: 0
+                                            }}>
+                                                <button
+                                                    onClick={() => {
+                                                        alert('Tính năng Crawl sẽ được hiện thực sau')
+                                                    }}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#007bff',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer',
+                                                        whiteSpace: 'nowrap',
+                                                        flex: windowWidth < 640 ? 1 : 'initial'
+                                                    }}
+                                                >
+                                                    Crawl
+                                                </button>
+                                                <button
+                                                    onClick={() => handleAutoCrawl(trend._id, 'market-trends')}
+                                                    disabled={crawlingIds.has(trend._id)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: crawlingIds.has(trend._id) ? '#adb5bd' : '#6c757d',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: crawlingIds.has(trend._id) ? 'not-allowed' : 'pointer',
+                                                        whiteSpace: 'nowrap',
+                                                        flex: windowWidth < 640 ? 1 : 'initial',
+                                                        opacity: crawlingIds.has(trend._id) ? 0.6 : 1
+                                                    }}
+                                                >
+                                                    {crawlingIds.has(trend._id) ? '⏳ Đang crawl...' : 'Lấy nội dung cũ'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Editable content area */}
+                                    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                    {editingTrendId === trend._id ? (
+                                        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                            <textarea
+                                                value={editedContent}
+                                                onChange={(e) => setEditedContent(e.target.value)}
+                                                style={{
+                                                    width: '100%',
+                                                    minHeight: '200px',
+                                                    padding: '12px',
+                                                    border: '1px solid #ced4da',
+                                                    borderRadius: '4px',
+                                                    fontSize: '14px',
+                                                    lineHeight: '1.8',
+                                                    fontFamily: 'inherit',
+                                                    resize: 'vertical'
+                                                }}
+                                            />
+                                            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                                <button
+                                                    onClick={() => handleUpdateBankingTrendContent(trend._id)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#28a745',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Lưu
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditingTrendId(null)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#dc3545',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Hủy
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <div style={{
+                                                marginBottom: '8px',
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                                overflowWrap: 'anywhere',
+                                                maxHeight: '400px',
+                                                overflowY: 'auto',
+                                                overflowX: 'auto',
+                                                padding: '8px',
+                                                backgroundColor: '#f8f9fa',
+                                                borderRadius: '4px',
+                                                border: '1px solid #dee2e6',
+                                                width: '100%',
+                                                boxSizing: 'border-box'
+                                            }}>
+                                                {trend.detail_content || 'Chưa có nội dung chi tiết'}
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingTrendId(trend._id)
+                                                    setEditedContent(trend.detail_content || '')
+                                                }}
+                                                style={{
+                                                    padding: '6px 12px',
+                                                    backgroundColor: '#ffc107',
+                                                    color: '#000000',
+                                                    border: 'none',
+                                                    borderRadius: '4px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Chỉnh sửa
+                                            </button>
+                                        </div>
+                                    )}
+                                    </div>
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    )
+
+    // Render Page 4: Fintech News
+    const renderPage4FintechNews = () => (
+        <div style={{ marginBottom: '32px' }}>
+            {selectedFintechNews.map((news) => (
+                <div key={news._id} style={{
+                    border: '1px solid #dee2e6',
+                    borderRadius: '8px',
+                    marginBottom: '24px',
+                    overflow: 'hidden',
+                    backgroundColor: '#ffffff'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: windowWidth < 768 ? 'column' : 'row'
+                    }}>
+                        <div style={{
+                            width: windowWidth < 768 ? '100%' : '200px',
+                            minWidth: windowWidth < 768 ? 'auto' : '200px',
+                            padding: '20px',
+                            backgroundColor: '#fff3c5ff',
+                            borderRight: windowWidth < 768 ? 'none' : '1px solid #dee2e6',
+                            borderBottom: windowWidth < 768 ? '1px solid #dee2e6' : 'none',
+                            fontWeight: '700',
+                            fontSize: '14px',
+                            color: '#2c3e50',
+                            textAlign: 'center',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            {news.fintech_topic || 'N/A'}
+                        </div>
+                        <div style={{
+                            flex: 1,
+                            padding: '20px',
+                            fontSize: '14px',
+                            color: '#495057',
+                            lineHeight: '1.8',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            minHeight: 0
+                        }}>
+                            <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '700', color: '#2c3e50' }}>
+                                {news.title}
+                            </h4>
+
+                                    {/* Crawl URL input and buttons */}
+                                    <div style={{
+                                        marginBottom: '16px',
+                                        padding: '12px',
+                                        backgroundColor: '#f8f9fa',
+                                        borderRadius: '6px',
+                                        border: '1px solid #dee2e6'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            flexDirection: windowWidth < 640 ? 'column' : 'row',
+                                            gap: '8px',
+                                            alignItems: windowWidth < 640 ? 'stretch' : 'center',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <input
+                                                type="text"
+                                                placeholder="Nhập link để crawl..."
+                                                value={crawlUrls[news._id] || ''}
+                                                onChange={(e) => setCrawlUrls({ ...crawlUrls, [news._id]: e.target.value })}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px 12px',
+                                                    border: '1px solid #ced4da',
+                                                    borderRadius: '4px',
+                                                    fontSize: '13px',
+                                                    minWidth: windowWidth < 640 ? 'auto' : '200px'
+                                                }}
+                                            />
+                                            <div style={{
+                                                display: 'flex',
+                                                gap: '8px',
+                                                flexShrink: 0
+                                            }}>
+                                                <button
+                                                    onClick={() => {
+                                                        alert('Tính năng Crawl sẽ được hiện thực sau')
+                                                    }}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#007bff',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer',
+                                                        whiteSpace: 'nowrap',
+                                                        flex: windowWidth < 640 ? 1 : 'initial'
+                                                    }}
+                                                >
+                                                    Crawl
+                                                </button>
+                                                <button
+                                                    onClick={() => handleAutoCrawl(news._id, 'fintech-news')}
+                                                    disabled={crawlingIds.has(news._id)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: crawlingIds.has(news._id) ? '#adb5bd' : '#6c757d',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: crawlingIds.has(news._id) ? 'not-allowed' : 'pointer',
+                                                        whiteSpace: 'nowrap',
+                                                        flex: windowWidth < 640 ? 1 : 'initial',
+                                                        opacity: crawlingIds.has(news._id) ? 0.6 : 1
+                                                    }}
+                                                >
+                                                    {crawlingIds.has(news._id) ? '⏳ Đang crawl...' : 'Lấy nội dung cũ'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Editable content area */}
+                                    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                    {editingNewsId === news._id ? (
+                                        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                            <textarea
+                                                value={editedContent}
+                                                onChange={(e) => setEditedContent(e.target.value)}
+                                                style={{
+                                                    width: '100%',
+                                                    minHeight: '200px',
+                                                    padding: '12px',
+                                                    border: '1px solid #ced4da',
+                                                    borderRadius: '4px',
+                                                    fontSize: '14px',
+                                                    lineHeight: '1.8',
+                                                    fontFamily: 'inherit',
+                                                    resize: 'vertical'
+                                                }}
+                                            />
+                                            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                                <button
+                                                    onClick={() => handleUpdateFintechNewsContent(news._id)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#28a745',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Lưu
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditingNewsId(null)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#dc3545',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Hủy
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <div style={{
+                                                marginBottom: '8px',
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                                overflowWrap: 'anywhere',
+                                                maxHeight: '400px',
+                                                overflowY: 'auto',
+                                                overflowX: 'auto',
+                                                padding: '8px',
+                                                backgroundColor: '#f8f9fa',
+                                                borderRadius: '4px',
+                                                border: '1px solid #dee2e6',
+                                                width: '100%',
+                                                boxSizing: 'border-box'
+                                            }}>
+                                                {news.detail_content || 'Chưa có nội dung chi tiết'}
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingNewsId(news._id)
+                                                    setEditedContent(news.detail_content || '')
+                                                }}
+                                                style={{
+                                                    padding: '6px 12px',
+                                                    backgroundColor: '#ffc107',
+                                                    color: '#000000',
+                                                    border: 'none',
+                                                    borderRadius: '4px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Chỉnh sửa
+                                            </button>
+                                        </div>
+                                    )}
+                                    </div>
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    )
+
+    // Render Action Buttons (Chọn lại & Xác nhận báo cáo) - only on page 4
+    const renderActionButtons = () => (
+        <div style={{
+            marginTop: '48px',
+            paddingTop: '32px',
+            borderTop: '2px solid #e9ecef',
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '16px',
+            alignItems: 'center'
+        }}>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                <button
+                    onClick={onResetWithCleanup}
+                    style={{
+                        padding: '16px 40px',
+                        backgroundColor: '#6c757d',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        boxShadow: '0 2px 8px rgba(108, 117, 125, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#5a6268'
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(108, 117, 125, 0.4)'
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#6c757d'
+                        e.currentTarget.style.transform = 'translateY(0)'
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.3)'
+                    }}
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="1 4 1 10 7 10" />
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                    </svg>
+                    Chọn lại
+                </button>
+                <button
+                    onClick={async () => {
+                        try {
+                            // Create report with selected items
+                            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/reports/create`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    startDate: startDateISO,
+                                    endDate: endDateISO
+                                })
+                            })
+
+                            const result = await response.json()
+
+                            if (result.success) {
+                                alert(`Báo cáo đã được tạo thành công!\nTổng số tin: ${result.report.totalItems}\nKhoảng thời gian: ${result.report.dateRange}`)
+                                onReportConfirmed()
+                            } else {
+                                alert('Có lỗi xảy ra khi tạo báo cáo: ' + (result.error || 'Unknown error'))
+                            }
+                        } catch (error) {
+                            console.error('Error creating report:', error)
+                            alert('Có lỗi xảy ra khi tạo báo cáo!')
+                        }
+                    }}
+                    style={{
+                        padding: '16px 40px',
+                        backgroundColor: '#F00020',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        boxShadow: '0 2px 8px rgba(240, 0, 32, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#c00018'
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(240, 0, 32, 0.4)'
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#F00020'
+                        e.currentTarget.style.transform = 'translateY(0)'
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(240, 0, 32, 0.3)'
+                    }}
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M9 11l3 3L22 4" />
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                    </svg>
+                    Xác nhận báo cáo
+                </button>
+            </div>
+        </div>
+    )
+
+    return (
+        <div style={{
+            backgroundColor: '#ffffff',
+            border: '1px solid #dee2e6',
+            borderRadius: '12px',
+            padding: '32px',
+            minHeight: '500px'
+        }}>
+            {/* Page Title */}
+            <h2 style={{
+                fontSize: '24px',
+                fontWeight: '700',
+                color: '#2c3e50',
+                marginBottom: '24px',
+                paddingBottom: '12px',
+                borderBottom: '3px solid #F00020'
+            }}>
+                {currentMainPage === 1 && '📊 Tổng hợp nhanh tin tức'}
+                {currentMainPage === 2 && '🏦 Cập nhật sản phẩm mới và nổi bật các ngân hàng'}
+                {currentMainPage === 3 && '📈 Cập nhật tin tức nổi bật của thị trường ngân hàng'}
+                {currentMainPage === 4 && '💡 Cập nhật tin tức nổi bật của thị trường Fintech'}
+            </h2>
+
+            {/* Page Content */}
+            {currentMainPage === 1 && page1Content}
+            {currentMainPage === 2 && renderPage2ProductTable()}
+            {currentMainPage === 3 && renderPage3BankingTrends()}
+            {currentMainPage === 4 && (
+                <>
+                    {renderPage4FintechNews()}
+                    {renderActionButtons()}
+                </>
+            )}
+
+            {/* Page Navigation - show on all pages */}
+            {renderPageNavigation()}
+        </div>
+    )
+}
+
+export default SummaryPages

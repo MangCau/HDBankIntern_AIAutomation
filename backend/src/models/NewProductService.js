@@ -6,11 +6,15 @@ const newProductServiceSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  product_segment: String,
+  product_segment: [String], // Array of strings with 2 items: [category, subcategory]
   // product_category: String,
   description: String,
-  image: String,
+  image: [String],
   selected:Boolean,
+  source_of_detail: String,
+  reportSelected: Boolean,
+  detail_content: String,
+  url_category_precheck: String,
   date_published: mongoose.Schema.Types.Mixed, // Support both String and Date
   source_type: String,
   source_url: String,

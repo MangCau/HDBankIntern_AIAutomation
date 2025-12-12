@@ -9,8 +9,12 @@ const bankingMarketTrendSchema = new mongoose.Schema({
   summary: String,
   bank_related: mongoose.Schema.Types.Mixed, // Support both String and Array
   // impact_level: String,
-  image: String,
+  image: [String],
   selected:Boolean,
+  reportSelected:Boolean,
+  source_of_detail: String,
+  detail_content: String,
+  url_category_precheck: String,
   source_type: String,
   source_url: String,
   published_date: mongoose.Schema.Types.Mixed, // Support both String and Date

@@ -6,3 +6,5 @@ Mở rộng nguồn thông tin từ bên ngoài (????)
 2. Account Page
 Hiện thực đơn giản các thông tin tài khoản
 3. Xem lại giao diện, chỉnh sửa các chỉ tiết
+----------
+chinrh laij icon logo ngan hang
