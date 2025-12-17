@@ -16,6 +16,7 @@ interface NewsItem {
     source_date: string // Format from database
     source_name: string
     selected: boolean
+    topic_classification?: string
 }
 
 // Base interface for all summary items
@@ -60,7 +61,7 @@ interface NewProductData {
     product_name: string
     product_segment?: string[]
     description?: string
-    image?: string[]  // Changed to array: image[0] for display, image[1] for backup
+    image?: string
     selected: boolean
     source_of_detail?: string
     reportSelected?: boolean
@@ -78,7 +79,7 @@ interface BankingTrendData {
     title: string
     summary?: string
     bank_related: string | string[]
-    image?: string[]  // Changed to array: image[0] for display, image[1] for backup
+    image?: string
     selected: boolean
     reportSelected?: boolean
     source_of_detail?: string
@@ -97,7 +98,7 @@ interface FintechNewsData {
     title: string
     summary?: string
     organization?: string
-    image?: string[]  // Changed to array: image[0] for display, image[1] for backup
+    image?: string
     selected: boolean
     source_of_detail?: string
     reportSelected?: boolean
@@ -135,12 +136,118 @@ function SummaryContent({
 
     // Real data from API
     const [newProducts, setNewProducts] = useState<NewProductData[]>([])
+    const [sortedNewProducts, setSortedNewProducts] = useState<NewProductData[]>([])
     const [marketTrends, setMarketTrends] = useState<BankingTrendData[]>([])
     const [fintechNews, setFintechNews] = useState<FintechNewsData[]>([])
     const [loading, setLoading] = useState(true)
 
     // Track pending selection changes (not yet saved to database)
     const [pendingSelectionChanges, setPendingSelectionChanges] = useState<Map<string, { collection: string, selected: boolean }>>(new Map())
+
+    // AI sorting function for new products
+    const sortProductsWithAI = async (products: NewProductData[]): Promise<NewProductData[]> => {
+        if (products.length === 0) return products
+
+        try {
+            console.log('🤖 Sorting products with AI Gemini...')
+
+            // Extract product_name and product_segment for AI
+            const productsForSorting = products.map(p => ({
+                _id: p._id,
+                product_name: p.product_name,
+                product_segment: p.product_segment || []
+            }))
+
+            const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+            if (!apiKey) {
+                console.warn('GEMINI_API_KEY not found, returning unsorted products')
+                return products
+            }
+
+            const prompt = `Vai trò: Bạn là một chuyên gia sắp xếp và phân loại dữ liệu ngân hàng.
+Nhiệm vụ: Sắp xếp lại mảng JSON đầu vào (Input Data) dựa trên mức độ ưu tiên của trường product_segment.
+
+QUY TẮC SẮP XẾP (PRIORITY LOGIC):
+
+Hãy duyệt qua trường product_segment của từng bản ghi và xếp hạng theo thứ tự từ cao xuống thấp (1 là cao nhất) như sau:
+
+Ưu tiên 1 (Cao nhất): Các sản phẩm về Thẻ.
+Điều kiện: product_segment chứa từ khóa "Thẻ", "Thẻ tín dụng", "Thẻ ghi nợ".
+
+Ưu tiên 2: Các sản phẩm Ngân hàng điện tử & Tiện ích.
+Điều kiện: product_segment chứa từ khóa "Ngân hàng Điện tử", "eBanking", "Tiện ích chức năng".
+
+Ưu tiên 3: Các sản phẩm Tiền gửi (Huy động vốn).
+Điều kiện: product_segment chứa từ khóa "Sản phẩm Tiền gửi", "Tiền gửi tiết kiệm", "Chứng chỉ tiền gửi".
+
+Ưu tiên 4: Các sản phẩm Vay (Tín dụng).
+Điều kiện: product_segment chứa từ khóa "Sản phẩm Vay", "Vay tiêu dùng", "Vay mua nhà/xe".
+
+Ưu tiên 5 (Thấp nhất): Các sản phẩm và dịch vụ Khác.
+Điều kiện: Các trường hợp còn lại (Ví dụ: "Dịch vụ KHCN Khác", "Bảo hiểm", "Hoạt động thương hiệu"...).
+
+Kết quả trả ra:
+Chỉ trả về một mảng JSON chứa các object với 2 trường "_id" và thứ tự ưu tiên đã được sắp xếp. KHÔNG thêm bất kỳ text nào khác.
+Format: [{"_id": "xxx"}, {"_id": "yyy"}, ...]
+
+Input Data:
+${JSON.stringify(productsForSorting, null, 2)}`
+
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: prompt }]
+                        }]
+                    })
+                }
+            )
+
+            const data = await response.json()
+            const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+            if (!aiResponse) {
+                console.warn('No AI response, returning unsorted products')
+                return products
+            }
+
+            // Parse AI response (remove markdown code blocks if present)
+            let sortedIds: { _id: string }[] = []
+            try {
+                const cleanedResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim()
+                sortedIds = JSON.parse(cleanedResponse)
+            } catch (parseError) {
+                console.error('Error parsing AI response:', parseError)
+                return products
+            }
+
+            // Map sorted IDs back to full product objects
+            const sortedProducts: NewProductData[] = []
+            sortedIds.forEach(({ _id }) => {
+                const product = products.find(p => p._id === _id)
+                if (product) {
+                    sortedProducts.push(product)
+                }
+            })
+
+            // Add any products that weren't in the sorted list (shouldn't happen)
+            products.forEach(p => {
+                if (!sortedProducts.find(sp => sp._id === p._id)) {
+                    sortedProducts.push(p)
+                }
+            })
+
+            console.log('✅ Products sorted successfully by AI')
+            return sortedProducts
+
+        } catch (error) {
+            console.error('Error sorting products with AI:', error)
+            return products // Return unsorted on error
+        }
+    }
 
     // Fetch selected items from API
     useEffect(() => {
@@ -151,7 +258,13 @@ function SummaryContent({
                 const result = await response.json()
 
                 if (result.success) {
-                    setNewProducts(result.data.newProducts || [])
+                    const fetchedProducts = result.data.newProducts || []
+                    setNewProducts(fetchedProducts)
+
+                    // Sort products with AI
+                    const sorted = await sortProductsWithAI(fetchedProducts)
+                    setSortedNewProducts(sorted)
+
                     setMarketTrends(result.data.marketTrends || [])
                     setFintechNews(result.data.fintechNews || [])
                 }
@@ -167,10 +280,36 @@ function SummaryContent({
 
     // Convert data to categories
     const dataByCategory: Record<string, any[]> = {
-        'Sản phẩm & Dịch vụ mới': newProducts,
+        'Sản phẩm & Dịch vụ mới': sortedNewProducts.length > 0 ? sortedNewProducts : newProducts,
         'Tin tức ngành Ngân hàng': marketTrends,
         'Tin tức ngành Fintech': fintechNews
     }
+
+    // Auto-adjust current page when items change (e.g., after deletion)
+    useEffect(() => {
+        setCurrentPage(prev => {
+            const updated = { ...prev }
+            let hasChanges = false
+
+            Object.entries(dataByCategory).forEach(([categoryTitle, items]) => {
+                const totalPages = Math.ceil(items.length / itemsPerPage)
+                const currentPageNum = prev[categoryTitle] || 1
+
+                // If current page exceeds total pages, reset to last valid page
+                if (currentPageNum > totalPages && totalPages > 0) {
+                    updated[categoryTitle] = totalPages
+                    hasChanges = true
+                }
+                // If no items, reset to page 1
+                else if (items.length === 0) {
+                    updated[categoryTitle] = 1
+                    hasChanges = true
+                }
+            })
+
+            return hasChanges ? updated : prev
+        })
+    }, [newProducts.length, sortedNewProducts.length, marketTrends.length, fintechNews.length])
 
     // Helper functions
     const getTitle = (item: any): string => {
@@ -322,75 +461,115 @@ function SummaryContent({
         setTempSummaryValue('')
     }
 
-    // Toggle selection status (not saved to DB yet)
-    const handleToggleSelection = (categoryTitle: string, itemId: string, currentSelected: boolean) => {
+    // // Toggle selection status (not saved to DB yet)
+    // const handleToggleSelection = (categoryTitle: string, itemId: string, currentSelected: boolean) => {
+    //     let collection = ''
+    //     if (categoryTitle === 'Sản phẩm & Dịch vụ mới') collection = 'new-products'
+    //     else if (categoryTitle === 'Tin tức ngành Ngân hàng') collection = 'market-trends'
+    //     else if (categoryTitle === 'Tin tức ngành Fintech') collection = 'fintech-news'
+
+    //     // Update local state immediately
+    //     if (collection === 'new-products') {
+    //         setNewProducts(prev => prev.map(i => i._id === itemId ? { ...i, selected: !currentSelected } : i))
+    //     } else if (collection === 'market-trends') {
+    //         setMarketTrends(prev => prev.map(i => i._id === itemId ? { ...i, selected: !currentSelected } : i))
+    //     } else if (collection === 'fintech-news') {
+    //         setFintechNews(prev => prev.map(i => i._id === itemId ? { ...i, selected: !currentSelected } : i))
+    //     }
+
+    //     // Track the change for later batch update
+    //     setPendingSelectionChanges(prev => {
+    //         const newMap = new Map(prev)
+    //         newMap.set(itemId, { collection, selected: !currentSelected })
+    //         return newMap
+    //     })
+    // }
+
+    // Toggle reportSelected status and save to DB immediately
+    const handleToggleReportSelected = async (categoryTitle: string, itemId: string, currentReportSelected: boolean) => {
         let collection = ''
         if (categoryTitle === 'Sản phẩm & Dịch vụ mới') collection = 'new-products'
         else if (categoryTitle === 'Tin tức ngành Ngân hàng') collection = 'market-trends'
         else if (categoryTitle === 'Tin tức ngành Fintech') collection = 'fintech-news'
 
-        // Update local state immediately
-        if (collection === 'new-products') {
-            setNewProducts(prev => prev.map(i => i._id === itemId ? { ...i, selected: !currentSelected } : i))
-        } else if (collection === 'market-trends') {
-            setMarketTrends(prev => prev.map(i => i._id === itemId ? { ...i, selected: !currentSelected } : i))
-        } else if (collection === 'fintech-news') {
-            setFintechNews(prev => prev.map(i => i._id === itemId ? { ...i, selected: !currentSelected } : i))
-        }
-
-        // Track the change for later batch update
-        setPendingSelectionChanges(prev => {
-            const newMap = new Map(prev)
-            newMap.set(itemId, { collection, selected: !currentSelected })
-            return newMap
-        })
-    }
-
-    // Save all pending selection changes to database
-    const handleSaveSelectionChanges = async () => {
-        if (pendingSelectionChanges.size === 0) {
-            alert('Không có thay đổi nào!')
-            return
-        }
-
-        if (!confirm(`Bạn có chắc chắn muốn cập nhật ${pendingSelectionChanges.size} thay đổi?`)) {
-            return
-        }
-
         try {
-            // Group changes by collection
-            const changesByCollection: Record<string, Array<{ id: string, selected: boolean }>> = {}
+            // Update database immediately
+            const response = await fetch(apiEndpoint(`api/data/update-field/${collection}/${itemId}`), {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    field: 'reportSelected',
+                    value: !currentReportSelected
+                })
+            })
 
-            pendingSelectionChanges.forEach((value, id) => {
-                if (!changesByCollection[value.collection]) {
-                    changesByCollection[value.collection] = []
+            const result = await response.json()
+            if (result.success) {
+                // Update local state after successful DB update
+                if (collection === 'new-products') {
+                    setNewProducts(prev => prev.map(i => i._id === itemId ? { ...i, reportSelected: !currentReportSelected } : i))
+                    setSortedNewProducts(prev => prev.map(i => i._id === itemId ? { ...i, reportSelected: !currentReportSelected } : i))
+                } else if (collection === 'market-trends') {
+                    setMarketTrends(prev => prev.map(i => i._id === itemId ? { ...i, reportSelected: !currentReportSelected } : i))
+                } else if (collection === 'fintech-news') {
+                    setFintechNews(prev => prev.map(i => i._id === itemId ? { ...i, reportSelected: !currentReportSelected } : i))
                 }
-                changesByCollection[value.collection].push({ id, selected: value.selected })
-            })
-
-            // Send updates for each collection
-            const updatePromises = Object.entries(changesByCollection).map(([collection, changes]) => {
-                return Promise.all(changes.map(({ id, selected }) =>
-                    fetch(apiEndpoint(`api/data/update-field/${collection}/${id}`), {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            field: 'selected',
-                            value: selected
-                        })
-                    })
-                ))
-            })
-
-            await Promise.all(updatePromises)
-
-            alert('Đã cập nhật thành công!')
-            setPendingSelectionChanges(new Map())
+            } else {
+                alert('Có lỗi xảy ra khi cập nhật!')
+            }
         } catch (error) {
-            console.error('Error updating selections:', error)
-            alert('Có lỗi xảy ra khi cập nhật!')
+            console.error('Error toggling reportSelected:', error)
+            alert('Có lỗi xảy ra!')
         }
     }
+
+    // // Save all pending selection changes to database
+    // const handleSaveSelectionChanges = async () => {
+    //     if (pendingSelectionChanges.size === 0) {
+    //         alert('Không có thay đổi nào!')
+    //         return
+    //     }
+
+    //     if (!confirm(`Bạn có chắc chắn muốn cập nhật ${pendingSelectionChanges.size} thay đổi?`)) {
+    //         return
+    //     }
+
+    //     try {
+    //         // Group changes by collection
+    //         const changesByCollection: Record<string, Array<{ id: string, selected: boolean }>> = {}
+
+    //         pendingSelectionChanges.forEach((value, id) => {
+    //             if (!changesByCollection[value.collection]) {
+    //                 changesByCollection[value.collection] = []
+    //             }
+    //             changesByCollection[value.collection].push({ id, selected: value.selected })
+    //         })
+
+    //         // Send updates for each collection
+    //         const updatePromises = Object.entries(changesByCollection).map(([collection, changes]) => {
+    //             return Promise.all(changes.map(({ id, selected }) =>
+    //                 fetch(apiEndpoint(`api/data/update-field/${collection}/${id}`), {
+    //                     method: 'PATCH',
+    //                     headers: { 'Content-Type': 'application/json' },
+    //                     body: JSON.stringify({
+    //                         field: 'selected',
+    //                         value: selected
+    //                     })
+    //                 })
+    //             ))
+    //         })
+
+    //         await Promise.all(updatePromises)
+
+    //         alert('Đã cập nhật thành công!')
+    //         setPendingSelectionChanges(new Map())
+    //     } catch (error) {
+    //         console.error('Error updating selections:', error)
+    //         alert('Có lỗi xảy ra khi cập nhật!')
+    //     }
+    // }
 
 
     const formatDate = (dateString: string): string => {
@@ -437,10 +616,12 @@ function SummaryContent({
                 const result = await response.json()
                 if (result.success) {
                     // Update local state with data from backend
-                    // Backend handles the logic: first time sets both image[0] and image[1],
-                    // subsequent times only updates image[0]
                     if (collection === 'new-products') {
                         setNewProducts(prev => prev.map(item =>
+                            item._id === itemId ? result.data : item
+                        ))
+                        // Also update sortedNewProducts to reflect changes immediately
+                        setSortedNewProducts(prev => prev.map(item =>
                             item._id === itemId ? result.data : item
                         ))
                     } else if (collection === 'market-trends') {
@@ -492,6 +673,10 @@ function SummaryContent({
                 // Update local state with generated image
                 if (collection === 'new-products') {
                     setNewProducts(prev => prev.map(i =>
+                        i._id === itemId ? result.data : i
+                    ))
+                    // Also update sortedNewProducts to reflect changes immediately
+                    setSortedNewProducts(prev => prev.map(i =>
                         i._id === itemId ? result.data : i
                     ))
                 } else if (collection === 'market-trends') {
@@ -567,7 +752,7 @@ function SummaryContent({
                             return (
                                 <article key={item._id} className="news-card">
                                     <div className="news-image" style={{ position: 'relative' }}>
-                                        {(item.image && item.image.length > 0 && item.image[0]) ? (
+                                        {item.image ? (
                                             <div style={{ position: 'relative' }}>
                                                 <div style={{ position: 'relative', cursor: 'pointer' }}
                                                     onClick={() => {
@@ -618,7 +803,7 @@ function SummaryContent({
                                                         }
                                                     }}
                                                 >
-                                                    <img src={item.image[0]} alt={getTitle(item)} style={{ display: 'block', width: '100%' }} />
+                                                    <img src={item.image} alt={getTitle(item)} style={{ display: 'block', width: '100%' }} />
                                                     <div
                                                         data-overlay
                                                         style={{
@@ -907,10 +1092,10 @@ function SummaryContent({
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                                                     <h2 className="news-title" style={{ flex: 1, margin: 0 }}>{getTitle(item)}</h2>
                                                     <button
-                                                        onClick={() => handleToggleSelection(categoryTitle, item._id, item.selected)}
+                                                        onClick={() => handleToggleReportSelected(categoryTitle, item._id, item.reportSelected || false)}
                                                         style={{
                                                             padding: '6px 12px',
-                                                            backgroundColor: item.selected ? '#28a745' : '#dc3545',
+                                                            backgroundColor: item.reportSelected ? '#28a745' : '#dc3545',
                                                             color: '#ffffff',
                                                             border: 'none',
                                                             borderRadius: '4px',
@@ -923,7 +1108,7 @@ function SummaryContent({
                                                             transition: 'all 0.2s ease'
                                                         }}
                                                     >
-                                                        {item.selected ? (
+                                                        {item.reportSelected ? (
                                                             <>
                                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                                     <polyline points="20 6 9 17 4 12" />
@@ -975,7 +1160,7 @@ function SummaryContent({
 
                                                     {/* Product specific fields */}
                                                     {item.product_segment && (
-                                                        <p><strong>Phân khúc sản phẩm:</strong> {item.product_segment}</p>
+                                                        <p><strong>Phân khúc sản phẩm:</strong> {item.product_segment[0]} - {item.product_segment[1]}</p>
                                                     )}
 
                                                     {/* Banking News specific fields */}
@@ -1364,6 +1549,15 @@ function SelectNews() {
     const [confirmedNewsPage, setConfirmedNewsPage] = useState(1)
     const itemsPerPage = 10 // Number of news items per page
 
+    // Pagination state for each topic group in Priority View
+    const [topicPages, setTopicPages] = useState<Record<string, number>>({
+        'SPDV_NGAN_HANG_FINTECH': 1,
+        'THI_TRUONG_NGAN_HANG': 1,
+        'THI_TRUONG_FINTECH': 1,
+        'UNCLASSIFIED': 1
+    })
+    const itemsPerTopicPage = 5 // 5 items per page for each topic group
+
     // Helper function to render text with clickable links
     const renderTextWithLinks = (text: string) => {
         // First, normalize the text by removing line breaks within URLs
@@ -1551,13 +1745,13 @@ Priority Logic (Hệ tư duy sắp xếp):
 
 Tier 1 - Thị trường & Thương hiệu (Market & Brand Health): Ưu tiên cao nhất cho các thông tin liên quan trực tiếp đến Sản phẩm/Dịch vụ, Ưu đãi, và Sức khỏe thương hiệu (các bài đăng tương tác MXH về HDBank, Vikki, và Đối thủ cạnh tranh).
 
-Tier 2 - Vĩ mô & Ngành liên quan (Macro): Tin tức kinh tế vĩ mô, Bất động sản.
+Tier 2 - Vĩ mô & Ngành liên quan (Macro): Tin tức kinh tế vĩ mô, chính sách, nghị định và văn bản pháp luật.
 
 Tier 3 - Công nghệ & Đổi mới (Tech & Innovation): Tiếp theo là các xu hướng về Ứng dụng Công nghệ, Fintech, và Trí tuệ nhân tạo (AI) trong tài chính ngân hàng.
 
 Tier 4 - Khách hàng & Xã hội & Ecosystem (Consumer Context): Xu hướng tiêu dùng, Đời sống, Việc làm, Sức khỏe, Giáo dục, và các ngành trong hệ sinh thái liên kết (Hàng không).
 
-Tier 5 - Thông tin bổ trợ: Giải trí, Du lịch chung, null.
+Tier 5 - Thông tin bổ trợ: Giải trí, Du lịch chung, Bất động sản, null.
 
 Input Categories: ${JSON.stringify(availableCategories)}
 
@@ -1602,16 +1796,36 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
 
     // Trigger n8n workflow
     const handleTriggerWorkflow = async () => {
+        // Validate that all selected news have topic_classification
+        const newsWithoutTopic = confirmedNews.filter((item: NewsItem) => !item.topic_classification)
+
+        if (newsWithoutTopic.length > 0) {
+            alert(
+                `Bạn có ${newsWithoutTopic.length} tin tức đã chọn chưa được phân loại!\n\n` +
+                `Bạn cần chọn một trong ba chủ đề:\n` +
+                `• Sản phẩm dịch vụ\n` +
+                `• Tin tức ngân hàng\n` +
+                `• Tin tức fintech\n\n` +
+                `Nhấp "Quay lại" để phân loại các tin tức chưa có chủ đề.`
+            )
+            return // Stop execution if validation fails
+        }
+
         try {
             setIsProcessing(true)
             setWorkflowCompleted(false)
+
+            // Calculate endDate + 1 day for webhook (but keep original endDateISO for report)
+            const endDateObj = new Date(endDateISO)
+            endDateObj.setDate(endDateObj.getDate() + 1)
+            const endDateForWebhook = endDateObj.toISOString().split('T')[0] // Format: YYYY-MM-DD
 
             const response = await fetch(apiEndpoint('api/n8n/trigger-workflow'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     startDate: startDateISO,
-                    endDate: endDateISO
+                    endDate: endDateForWebhook // Send endDate + 1 day to webhook
                 })
             })
 
@@ -1678,11 +1892,13 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
         localStorage.removeItem('selectNews_endDateISO')
     }
 
-    // Handle report confirmed: Reset to selection step and navigate to Adjust page
+    // Handle report confirmed: Reset to selection step and navigate to HomePage
     const handleReportConfirmed = () => {
-        // Reset to selection step
+        // Clear the saved page number
+        localStorage.removeItem('summaryPages_currentPage')
+        // Reset to selection step (so when user returns to SelectNews, it's at selection step)
         handleResetToSelection()
-        // Navigate to Homepage page (/)
+        // Navigate to HomePage
         navigate('/')
     }
 
@@ -1695,15 +1911,16 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                 const result = await response.json()
 
                 if (result.success) {
+                    // Only reset selected=false for 3 main collections (NOT header_processing)
                     const allItems = [
                         ...result.data.newProducts.map((item: any) => ({ id: item._id, collection: 'new-products' })),
                         ...result.data.marketTrends.map((item: any) => ({ id: item._id, collection: 'market-trends' })),
-                        ...result.data.fintechNews.map((item: any) => ({ id: item._id, collection: 'fintech-news' })),
-                        ...(result.data.headerProcessing || []).map((item: any) => ({ id: item._id, collection: 'header-processing' }))
+                        ...result.data.fintechNews.map((item: any) => ({ id: item._id, collection: 'fintech-news' }))
+                        // Intentionally exclude headerProcessing to keep selected=true
                     ]
 
-                    // Update all items to selected = false
-                    await Promise.all(allItems.map(({ id, collection }) =>
+                    // Update all items to selected = false and reportSelected = false
+                    await Promise.all(allItems.flatMap(({ id, collection }) => [
                         fetch(apiEndpoint(`api/data/update-field/${collection}/${id}`), {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
@@ -1711,10 +1928,20 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                                 field: 'selected',
                                 value: false
                             })
+                        }),
+                        fetch(apiEndpoint(`api/data/update-field/${collection}/${id}`), {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                field: 'reportSelected',
+                                value: false
+                            })
                         })
-                    ))
+                    ]))
                 }
 
+                // Clear the saved page number
+                localStorage.removeItem('summaryPages_currentPage')
                 // Reset state and go back to selection
                 handleResetToSelection()
             } catch (error) {
@@ -1759,9 +1986,50 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
     const endIndex = startIndex + itemsPerPage
     const paginatedNews = filteredNews.slice(startIndex, endIndex)
 
+    // Group news by topic_classification for priority view with pagination per topic
+    const groupedByTopic = useMemo(() => {
+        if (!isPriorityView) return null;
+
+        const groups: Record<string, NewsItem[]> = {
+            'SPDV_NGAN_HANG_FINTECH': [],
+            'THI_TRUONG_NGAN_HANG': [],
+            'THI_TRUONG_FINTECH': [],
+            'UNCLASSIFIED': [] // For items without topic_classification
+        };
+
+        // Group all filtered news by topic first
+        filteredNews.forEach((item: NewsItem) => {
+            const topic = item.topic_classification || 'UNCLASSIFIED';
+            if (groups[topic]) {
+                groups[topic].push(item);
+            } else {
+                groups['UNCLASSIFIED'].push(item);
+            }
+        });
+
+        return groups;
+    }, [isPriorityView, filteredNews]);
+
+    // Topic labels
+    const topicLabels: Record<string, string> = {
+        'SPDV_NGAN_HANG_FINTECH': 'SẢN PHẨM DỊCH VỤ',
+        'THI_TRUONG_NGAN_HANG': 'TIN TỨC NGÂN HÀNG',
+        'THI_TRUONG_FINTECH': 'TIN TỨC FINTECH',
+        'UNCLASSIFIED': 'Chưa phân loại'
+    };
+
     // Reset to page 1 when filters change
     useEffect(() => {
         setCurrentPage(1)
+        // Reset all topic pages to 1 when switching to priority view or changing date
+        if (isPriorityView) {
+            setTopicPages({
+                'SPDV_NGAN_HANG_FINTECH': 1,
+                'THI_TRUONG_NGAN_HANG': 1,
+                'THI_TRUONG_FINTECH': 1,
+                'UNCLASSIFIED': 1
+            })
+        }
     }, [selectedCategory, isPriorityView, startDateISO, endDateISO])
 
     // Check if there are unsaved changes
@@ -1829,6 +2097,32 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
             ...prev,
             [id]: !prev[id]
         }))
+    }
+
+    const handleTopicClassificationChange = async (id: string, classification: string) => {
+        try {
+            const response = await fetch(`${API_URL}/header-processing/${id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ topic_classification: classification })
+            })
+
+            const result = await response.json()
+
+            if (result.success) {
+                // Update local newsData state
+                setNewsData(prev => prev.map(item =>
+                    item._id === id ? { ...item, topic_classification: classification } : item
+                ))
+            } else {
+                alert('Lỗi khi cập nhật phân loại: ' + result.message)
+            }
+        } catch (error) {
+            console.error('Error updating topic classification:', error)
+            alert('Có lỗi xảy ra khi cập nhật phân loại')
+        }
     }
 
     const handleUpdateSelection = async () => {
@@ -2124,8 +2418,8 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                                         }}>
                                             <div style={{ marginBottom: '12px', fontSize: '48px' }}>✅</div>
                                             <div style={{
-                                                fontSize: '20px',
-                                                fontWeight: '700',
+
+                                                fontWeight: '700',                                                fontSize: '20px',
                                                 color: '#155724',
                                                 marginBottom: '8px'
                                             }}>
@@ -2668,8 +2962,261 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
 
                         <div className="news-list">
                             {paginatedNews.length > 0 ? (
-                                paginatedNews.map((item) => (
-                                    <article key={item._id} className={`news-card ${confirmedPriorities[item._id] ? 'selected' : ''}`}>
+                                isPriorityView && groupedByTopic ? (
+                                    // Grouped view for Priority News
+                                    Object.entries(groupedByTopic).map(([topicKey, items]) => {
+                                        // Skip empty groups
+                                        if (items.length === 0) return null;
+
+                                        // Pagination for this topic group
+                                        const currentTopicPage = topicPages[topicKey] || 1;
+                                        const totalTopicPages = Math.ceil(items.length / itemsPerTopicPage);
+                                        const startIdx = (currentTopicPage - 1) * itemsPerTopicPage;
+                                        const endIdx = startIdx + itemsPerTopicPage;
+                                        const paginatedItems = items.slice(startIdx, endIdx);
+
+                                        return (
+                                            <div key={topicKey} style={{ marginBottom: '32px' }}>
+                                                {/* Topic Section Header */}
+                                                <div style={{
+                                                    backgroundColor: '#FFD643',
+                                                    padding: '12px 16px',
+                                                    borderRadius: '8px',
+                                                    marginBottom: '16px',
+                                                    borderLeft: '4px solid #ffffffff'
+                                                }}>
+                                                    <h3 style={{
+                                                        margin: 0,
+                                                        fontSize: '16px',
+                                                        fontWeight: '600',
+                                                        color: '#2c3e50'
+                                                    }}>
+                                                        {topicLabels[topicKey]} ({items.length})
+                                                    </h3>
+                                                </div>
+
+                                                {/* News cards in this topic group */}
+                                                {paginatedItems.map((item) => (
+                                                    <article key={item._id} className={`news-card ${confirmedPriorities[item._id] ? 'selected' : ''}`}>
+                                                        {isSelectionMode && (
+                                                            <div className="news-checkbox">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={tempPriorities[item._id]}
+                                                                    onChange={() => handleCheckboxChange(item._id)}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                        {!isSelectionMode && confirmedPriorities[item._id] && (
+                                                            <div className="news-selected-badge">
+                                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#28a745" strokeWidth="3">
+                                                                    <polyline points="20 6 9 17 4 12" />
+                                                                </svg>
+                                                            </div>
+                                                        )}
+                                                        <div className="news-content">
+                                                            {/* Show category header */}
+                                                            <div style={{
+                                                                display: 'inline-block',
+                                                                backgroundColor: '#F00020',
+                                                                color: '#ffffff',
+                                                                padding: '4px 12px',
+                                                                borderRadius: '4px',
+                                                                fontSize: '12px',
+                                                                fontWeight: '600',
+                                                                marginBottom: '12px'
+                                                            }}>
+                                                                {item.category}
+                                                            </div>
+                                                            <p className="news-summary" style={{
+                                                                fontSize: '15px',
+                                                                lineHeight: '1.6',
+                                                                marginBottom: '12px',
+                                                                color: '#2c3e50',
+                                                                whiteSpace: 'pre-line'
+                                                            }}>
+                                                                {renderTextWithLinks(item.chunk)}
+                                                            </p>
+                                                            <div className="news-meta">
+                                                                <div className="meta-item">
+                                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                                                        <line x1="16" y1="2" x2="16" y2="6" />
+                                                                        <line x1="8" y1="2" x2="8" y2="6" />
+                                                                        <line x1="3" y1="10" x2="21" y2="10" />
+                                                                    </svg>
+                                                                    <span>{parseSourceDate(item.source_date)}</span>
+                                                                </div>
+                                                                <div className='meta-item'>
+                                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                                                        <polyline points="15 3 21 3 21 9" />
+                                                                        <line x1="10" y1="14" x2="21" y2="3" />
+                                                                    </svg>
+                                                                    <span>Nguồn: {item.source_name}</span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Topic Classification Radio Buttons */}
+                                                            <div style={{
+                                                                marginTop: '12px',
+                                                                paddingTop: '12px',
+                                                                borderTop: '1px solid #e9ecef',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '8px'
+                                                            }}>
+                                                                <label style={{
+                                                                    fontSize: '13px',
+                                                                    fontWeight: '600',
+                                                                    color: '#495057',
+                                                                    marginBottom: '4px'
+                                                                }}>
+                                                                    Phân loại chủ đề:
+                                                                </label>
+                                                                <div style={{
+                                                                    display: 'flex',
+                                                                    gap: '16px',
+                                                                    flexWrap: 'wrap'
+                                                                }}>
+                                                                    <label style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '6px',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '13px',
+                                                                        color: '#495057'
+                                                                    }}>
+                                                                        <input
+                                                                            type="radio"
+                                                                            name={`topic-${item._id}`}
+                                                                            checked={item.topic_classification === 'SPDV_NGAN_HANG_FINTECH'}
+                                                                            onChange={() => handleTopicClassificationChange(item._id, 'SPDV_NGAN_HANG_FINTECH')}
+                                                                            style={{
+                                                                                cursor: 'pointer',
+                                                                                width: '16px',
+                                                                                height: '16px'
+                                                                            }}
+                                                                        />
+                                                                        <span>Sản phẩm dịch vụ</span>
+                                                                    </label>
+                                                                    <label style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '6px',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '13px',
+                                                                        color: '#495057'
+                                                                    }}>
+                                                                        <input
+                                                                            type="radio"
+                                                                            name={`topic-${item._id}`}
+                                                                            checked={item.topic_classification === 'THI_TRUONG_NGAN_HANG'}
+                                                                            onChange={() => handleTopicClassificationChange(item._id, 'THI_TRUONG_NGAN_HANG')}
+                                                                            style={{
+                                                                                cursor: 'pointer',
+                                                                                width: '16px',
+                                                                                height: '16px'
+                                                                            }}
+                                                                        />
+                                                                        <span>Tin tức ngân hàng</span>
+                                                                    </label>
+                                                                    <label style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '6px',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '13px',
+                                                                        color: '#495057'
+                                                                    }}>
+                                                                        <input
+                                                                            type="radio"
+                                                                            name={`topic-${item._id}`}
+                                                                            checked={item.topic_classification === 'THI_TRUONG_FINTECH'}
+                                                                            onChange={() => handleTopicClassificationChange(item._id, 'THI_TRUONG_FINTECH')}
+                                                                            style={{
+                                                                                cursor: 'pointer',
+                                                                                width: '16px',
+                                                                                height: '16px'
+                                                                            }}
+                                                                        />
+                                                                        <span>Tin tức fintech</span>
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </article>
+                                                ))}
+
+                                                {/* Pagination controls for this topic */}
+                                                {totalTopicPages > 1 && (
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        justifyContent: 'center',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        marginTop: '20px',
+                                                        paddingBottom: '16px'
+                                                    }}>
+                                                        <button
+                                                            onClick={() => setTopicPages(prev => ({
+                                                                ...prev,
+                                                                [topicKey]: Math.max(1, currentTopicPage - 1)
+                                                            }))}
+                                                            disabled={currentTopicPage === 1}
+                                                            style={{
+                                                                padding: '6px 12px',
+                                                                border: '1px solid #dee2e6',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: currentTopicPage === 1 ? '#f8f9fa' : '#ffffff',
+                                                                color: currentTopicPage === 1 ? '#6c757d' : '#495057',
+                                                                cursor: currentTopicPage === 1 ? 'not-allowed' : 'pointer',
+                                                                fontSize: '14px',
+                                                                fontWeight: '500',
+                                                                transition: 'all 0.2s ease'
+                                                            }}
+                                                        >
+                                                            ← Trước
+                                                        </button>
+
+                                                        <span style={{
+                                                            padding: '6px 12px',
+                                                            fontSize: '14px',
+                                                            color: '#495057',
+                                                            fontWeight: '500'
+                                                        }}>
+                                                            Trang {currentTopicPage} / {totalTopicPages}
+                                                        </span>
+
+                                                        <button
+                                                            onClick={() => setTopicPages(prev => ({
+                                                                ...prev,
+                                                                [topicKey]: Math.min(totalTopicPages, currentTopicPage + 1)
+                                                            }))}
+                                                            disabled={currentTopicPage === totalTopicPages}
+                                                            style={{
+                                                                padding: '6px 12px',
+                                                                border: '1px solid #dee2e6',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: currentTopicPage === totalTopicPages ? '#f8f9fa' : '#ffffff',
+                                                                color: currentTopicPage === totalTopicPages ? '#6c757d' : '#495057',
+                                                                cursor: currentTopicPage === totalTopicPages ? 'not-allowed' : 'pointer',
+                                                                fontSize: '14px',
+                                                                fontWeight: '500',
+                                                                transition: 'all 0.2s ease'
+                                                            }}
+                                                        >
+                                                            Tiếp →
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    // Regular non-grouped view
+                                    paginatedNews.map((item) => (
+                                        <article key={item._id} className={`news-card ${confirmedPriorities[item._id] ? 'selected' : ''}`}>
                                         {isSelectionMode && (
                                             <div className="news-checkbox">
                                                 <input
@@ -2728,12 +3275,100 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                                                         <line x1="10" y1="14" x2="21" y2="3" />
                                                     </svg>
                                                     <span>Nguồn: {item.source_name}</span>
+                                                </div>
+                                            </div>
 
+                                            {/* Topic Classification Radio Buttons */}
+                                            <div style={{
+                                                marginTop: '12px',
+                                                paddingTop: '12px',
+                                                borderTop: '1px solid #e9ecef',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '8px'
+                                            }}>
+                                                <label style={{
+                                                    fontSize: '13px',
+                                                    fontWeight: '600',
+                                                    color: '#495057',
+                                                    marginBottom: '4px'
+                                                }}>
+                                                    Phân loại chủ đề:
+                                                </label>
+                                                <div style={{
+                                                    display: 'flex',
+                                                    gap: '16px',
+                                                    flexWrap: 'wrap'
+                                                }}>
+                                                    <label style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '13px',
+                                                        color: '#495057'
+                                                    }}>
+                                                        <input
+                                                            type="radio"
+                                                            name={`topic-${item._id}`}
+                                                            checked={item.topic_classification === 'SPDV_NGAN_HANG_FINTECH'}
+                                                            onChange={() => handleTopicClassificationChange(item._id, 'SPDV_NGAN_HANG_FINTECH')}
+                                                            style={{
+                                                                cursor: 'pointer',
+                                                                width: '16px',
+                                                                height: '16px'
+                                                            }}
+                                                        />
+                                                        <span>Sản phẩm dịch vụ</span>
+                                                    </label>
+                                                    <label style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '13px',
+                                                        color: '#495057'
+                                                    }}>
+                                                        <input
+                                                            type="radio"
+                                                            name={`topic-${item._id}`}
+                                                            checked={item.topic_classification === 'THI_TRUONG_NGAN_HANG'}
+                                                            onChange={() => handleTopicClassificationChange(item._id, 'THI_TRUONG_NGAN_HANG')}
+                                                            style={{
+                                                                cursor: 'pointer',
+                                                                width: '16px',
+                                                                height: '16px'
+                                                            }}
+                                                        />
+                                                        <span>Tin tức ngân hàng</span>
+                                                    </label>
+                                                    <label style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '13px',
+                                                        color: '#495057'
+                                                    }}>
+                                                        <input
+                                                            type="radio"
+                                                            name={`topic-${item._id}`}
+                                                            checked={item.topic_classification === 'THI_TRUONG_FINTECH'}
+                                                            onChange={() => handleTopicClassificationChange(item._id, 'THI_TRUONG_FINTECH')}
+                                                            style={{
+                                                                cursor: 'pointer',
+                                                                width: '16px',
+                                                                height: '16px'
+                                                            }}
+                                                        />
+                                                        <span>Tin tức fintech</span>
+                                                    </label>
                                                 </div>
                                             </div>
                                         </div>
                                     </article>
-                                ))
+                                    ))
+                                )
                             ) : (
                                 <div className='no-results'>
                                     <p>Không có tin tức nào trong danh mục này</p>
@@ -2741,8 +3376,8 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                             )}
                         </div>
 
-                        {/* Pagination */}
-                        {filteredNews.length > itemsPerPage && (
+                        {/* Pagination - only show in non-priority view */}
+                        {!isPriorityView && filteredNews.length > itemsPerPage && (
                             <div style={{
                                 display: 'flex',
                                 justifyContent: 'center',

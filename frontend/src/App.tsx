@@ -3,7 +3,7 @@ import { NotificationProvider } from './contexts/NotificationContext'
 import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
 import UploadFile from './pages/UploadFile'
-import ViewNews from './pages/ViewNews'
+// import ViewNews from './pages/ViewNews'
 import SelectNews from './pages/SelectNews'
 import Adjust from './pages/Adjust'
 import Analytics from './pages/Analytics'
@@ -20,7 +20,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="upload" element={<UploadFile />} />
             <Route path="select-news" element={<SelectNews/>} />
-            <Route path="view-news" element={<ViewNews/>} />
+            {/* <Route path="view-news" element={<ViewNews/>} /> */}
             <Route path="settings" element={<Adjust/>} />
             <Route path="historyreport" element={<HistoryReport/>} />
             <Route path="report/:id" element={<ViewReport/>} />

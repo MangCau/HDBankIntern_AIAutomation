@@ -14,10 +14,12 @@ const headerProcessingSchema = new mongoose.Schema({
   selected: {
     type: Boolean,
     default: false
-  }
+  },
+  topic_classification: String,
 }, {
   collection: 'header_processing',
-  timestamps: false
+  timestamps: true,
+  strict: false
 });
 
 module.exports = mongoose.model('HeaderProcessing', headerProcessingSchema);

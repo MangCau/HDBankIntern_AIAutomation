@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { apiEndpoint } from '../config/api'
 import '../App.css'
 
 interface Report {
@@ -29,7 +30,7 @@ function HistoryReport() {
   const fetchReports = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`http://localhost:5000/api/reports?page=${currentPage}&limit=${itemsPerPage}`)
+      const response = await fetch(apiEndpoint(`api/reports?page=${currentPage}&limit=${itemsPerPage}`))
       const result = await response.json()
 
       if (!result.success) {
@@ -170,7 +171,7 @@ function HistoryReport() {
                 <tr>
                   <th style={tableHeaderStyle}>STT</th>
                   <th style={tableHeaderStyle}>Khoảng thời gian</th>
-                  <th style={tableHeaderStyle}>Số lượng tin</th>
+                  {/* <th style={tableHeaderStyle}>Số lượng tin</th> */}
                   <th style={tableHeaderStyle}>Ngày tạo</th>
                   <th style={tableHeaderStyle}>Thao tác</th>
                 </tr>
@@ -190,7 +191,7 @@ function HistoryReport() {
                     <td style={tableCellStyle}>
                       <strong>{report.dateRange}</strong>
                     </td>
-                    <td style={tableCellStyle}>
+                    {/* <td style={tableCellStyle}>
                       <span style={{
                         backgroundColor: '#e3f2fd',
                         color: '#1976d2',
@@ -201,7 +202,7 @@ function HistoryReport() {
                       }}>
                         {report.totalItems} tin
                       </span>
-                    </td>
+                    </td> */}
                     <td style={tableCellStyle}>{formatDate(report.createdAt)}</td>
                     <td style={tableCellStyle}>
                       <button

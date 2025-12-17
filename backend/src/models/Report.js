@@ -1,29 +1,28 @@
 const mongoose = require('mongoose');
 
-const reportItemSchema = new mongoose.Schema({
-  // Category/Collection name
+// Schema for Page 1 items (selected news with reportSelected = true)
+const page1ItemSchema = new mongoose.Schema({
+  _id: mongoose.Schema.Types.ObjectId,
   category: {
     type: String,
-    required: true,
-    enum: ['Sản phẩm & dịch vụ mới', 'Xu hướng thị trường ngân hàng', 'Tin tức ngành fintech']
+    enum: ['new-products', 'market-trends', 'fintech-news']
   },
 
-  // Original collection name for reference
-  originalCollection: {
-    type: String,
-    enum: ['new_product_service', 'banking_market_trends', 'fintech_news']
-  },
-
-  // Common fields across all types
-  image: String,
+  // Common fields
+  image: [String],
   source_type: String,
   source_url: String,
   pdf_file_name: String,
+  selected: Boolean,
+  reportSelected: Boolean,
+  detail_content: String,
+  source_of_detail: String,
+  topic_classification: String,
 
   // Fields from NewProductService
   bank: mongoose.Schema.Types.Mixed,
   product_name: String,
-  product_segment: String,
+  product_segment: [String],
   description: String,
   date_published: mongoose.Schema.Types.Mixed,
 
@@ -40,26 +39,79 @@ const reportItemSchema = new mongoose.Schema({
   organization: String
 }, { _id: false });
 
+// Schema for Page 2 - Content Card
+const contentCardSchema = new mongoose.Schema({
+  _id: mongoose.Schema.Types.ObjectId,
+  product_name: String,
+  image: String, // image[1]
+  detail_content: String,
+  source_of_detail: String
+}, { _id: false });
+
+// Schema for Page 2 - Comparison Table
+const comparisonTableSchema = new mongoose.Schema({
+  uniqueBanks: [String],
+  productsByCategory: mongoose.Schema.Types.Mixed // Record<string, Array<{level2: string, banks: string[]}>>
+}, { _id: false });
+
+// Schema for Page 2
+const page2Schema = new mongoose.Schema({
+  comparisonTable: comparisonTableSchema,
+  summaryList: [String], // Array of product names from summary list
+  contentCards: [contentCardSchema]
+}, { _id: false });
+
+// Schema for Page 3 - Topic Group
+const page3GroupSchema = new mongoose.Schema({
+  topic_group: String,
+  items: [{
+    _id: mongoose.Schema.Types.ObjectId,
+    title: String,
+    detail_content: String,
+    source_of_detail: String
+  }],
+  images: [String], // Array of uploaded/dropped images (base64)
+  manualContent: String // Content from empty groups (Tỷ giá, Giá vàng)
+}, { _id: false });
+
+// Schema for Page 4 - Area Affected
+const page4GroupSchema = new mongoose.Schema({
+  area_affected: String,
+  items: [{
+    _id: mongoose.Schema.Types.ObjectId,
+    title: String,
+    detail_content: String,
+    source_of_detail: String
+  }],
+  images: [String] // Array of uploaded/dropped images (base64)
+}, { _id: false });
+
 const reportSchema = new mongoose.Schema({
-  // Date range string (e.g., "01/11/2024 - 30/11/2024")
+  // Date range information
+  startDate: {
+    type: String,
+    required: true
+  },
+  endDate: {
+    type: String,
+    required: true
+  },
   dateRange: {
     type: String,
     required: true
   },
 
-  // Parsed start and end dates for querying
-  startDate: {
-    type: String,
-    required: true
-  },
+  // Page 1: All selected items with reportSelected = true
+  page1: [page1ItemSchema],
 
-  endDate: {
-    type: String,
-    required: true
-  },
+  // Page 2: Product information
+  page2: page2Schema,
 
-  // Array of report items
-  items: [reportItemSchema],
+  // Page 3: Banking trends grouped by topic_group
+  page3: [page3GroupSchema],
+
+  // Page 4: Fintech news grouped by area_affected
+  page4: [page4GroupSchema],
 
   // Metadata
   totalItems: {

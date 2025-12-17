@@ -9,7 +9,7 @@ const bankingMarketTrendSchema = new mongoose.Schema({
   summary: String,
   bank_related: mongoose.Schema.Types.Mixed, // Support both String and Array
   // impact_level: String,
-  image: [String],
+  image: String,
   selected:Boolean,
   reportSelected:Boolean,
   source_of_detail: String,

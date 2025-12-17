@@ -12,6 +12,11 @@ backend/.env
 frontend/.env
 n8n/.env
 
+# Google Cloud credentials
+gcs-key.json
+**/gcs-key.json
+backend/gcs-key.json
+
 # Logs
 logs
 *.log

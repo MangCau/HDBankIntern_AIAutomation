@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { apiEndpoint } from '../config/api'
 
 // Interface for NewProductService data
 interface NewProductData {
@@ -7,7 +8,7 @@ interface NewProductData {
     product_name: string
     product_segment?: string[]
     description?: string
-    image?: string[]  // Changed to array: image[0] for display, image[1] for backup
+    image?: string
     selected: boolean
     source_of_detail?: string
     reportSelected?: boolean
@@ -26,7 +27,7 @@ interface BankingTrendData {
     title: string
     summary?: string
     bank_related: string | string[]
-    image?: string[]
+    image?: string
     selected: boolean
     reportSelected?: boolean
     source_of_detail?: string
@@ -46,7 +47,7 @@ interface FintechNewsData {
     title: string
     summary?: string
     organization?: string
-    image?: string[]
+    image?: string
     selected: boolean
     source_of_detail?: string
     reportSelected?: boolean
@@ -84,14 +85,23 @@ function SummaryPages({
     bankingTrends,
     fintechNews
 }: SummaryPagesProps) {
-    const [currentMainPage, setCurrentMainPage] = useState(1)
+    // Restore current page from localStorage on mount
+    const [currentMainPage, setCurrentMainPage] = useState(() => {
+        const savedPage = localStorage.getItem('summaryPages_currentPage')
+        return savedPage ? parseInt(savedPage) : 1
+    })
     // State for editing detail content
     const [editingProductId, setEditingProductId] = useState<string | null>(null)
     const [editingTrendId, setEditingTrendId] = useState<string | null>(null)
     const [editingNewsId, setEditingNewsId] = useState<string | null>(null)
     const [editedContent, setEditedContent] = useState<string>('')
-    const [crawlUrls, setCrawlUrls] = useState<Record<string, string>>({})
     const [crawlingIds, setCrawlingIds] = useState<Set<string>>(new Set()) // Track which items are being crawled
+    const [customCrawlUrls, setCustomCrawlUrls] = useState<Record<string, string>>({}) // Custom URLs for manual crawl
+    const [groupImages, setGroupImages] = useState<Record<string, string[]>>({}) // Store multiple images per group (groupId -> array of image URLs)
+    const [uploadingGroupImage, setUploadingGroupImage] = useState<string | null>(null) // Track which group is uploading image
+    const [emptyGroupContent, setEmptyGroupContent] = useState<Record<string, string>>({}) // Store content for empty groups (Tỷ giá, Giá vàng)
+    const [emptyGroupSources, setEmptyGroupSources] = useState<Record<string, string>>({}) // Store source URLs for empty groups
+    const [editingEmptyGroup, setEditingEmptyGroup] = useState<string | null>(null) // Track which empty group is being edited
 
     // State for responsive design
     const [windowWidth, setWindowWidth] = useState(window.innerWidth)
@@ -109,6 +119,69 @@ function SummaryPages({
         return () => window.removeEventListener('resize', handleResize)
     }, [])
 
+    // Save current page to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('summaryPages_currentPage', currentMainPage.toString())
+    }, [currentMainPage])
+
+    // Load group images from localStorage on mount
+    useEffect(() => {
+        try {
+            const savedImages = localStorage.getItem('summaryPages_groupImages')
+            if (savedImages) {
+                const parsed = JSON.parse(savedImages)
+                setGroupImages(parsed)
+            }
+        } catch (error) {
+            console.error('Error loading group images from localStorage:', error)
+        }
+    }, [])
+
+    // Save group images to localStorage whenever they change
+    useEffect(() => {
+        try {
+            localStorage.setItem('summaryPages_groupImages', JSON.stringify(groupImages))
+        } catch (error) {
+            console.error('Error saving group images to localStorage:', error)
+        }
+    }, [groupImages])
+
+    // Load empty group content from localStorage on mount
+    useEffect(() => {
+        try {
+            const savedContent = localStorage.getItem('summaryPages_emptyGroupContent')
+            if (savedContent) {
+                const parsed = JSON.parse(savedContent)
+                setEmptyGroupContent(parsed)
+            }
+            const savedSources = localStorage.getItem('summaryPages_emptyGroupSources')
+            if (savedSources) {
+                const parsed = JSON.parse(savedSources)
+                setEmptyGroupSources(parsed)
+            }
+        } catch (error) {
+            console.error('Error loading empty group content from localStorage:', error)
+        }
+    }, [])
+
+    // Save empty group content to localStorage whenever it changes
+    useEffect(() => {
+        try {
+            localStorage.setItem('summaryPages_emptyGroupContent', JSON.stringify(emptyGroupContent))
+        } catch (error) {
+            console.error('Error saving empty group content to localStorage:', error)
+        }
+    }, [emptyGroupContent])
+
+    // Save empty group sources to localStorage whenever it changes
+    useEffect(() => {
+        try {
+            localStorage.setItem('summaryPages_emptyGroupSources', JSON.stringify(emptyGroupSources))
+        } catch (error) {
+            console.error('Error saving empty group sources to localStorage:', error)
+        }
+    }, [emptyGroupSources])
+
     // Filter selected items
     const selectedProducts = newProducts.filter(product => product.selected)
     const selectedBankingTrends = bankingTrends.filter(trend => trend.selected)
@@ -117,7 +190,7 @@ function SummaryPages({
     // Handle update detail content for products
     const handleUpdateDetailContent = async (productId: string) => {
         try {
-            const response = await fetch(`http://localhost:5000/api/data/update-field/new-products/${productId}`, {
+            const response = await fetch(apiEndpoint(`api/data/update-field/new-products/${productId}`), {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json'
@@ -145,7 +218,7 @@ function SummaryPages({
     // Handle update detail content for banking trends
     const handleUpdateBankingTrendContent = async (trendId: string) => {
         try {
-            const response = await fetch(`http://localhost:5000/api/data/update-field/market-trends/${trendId}`, {
+            const response = await fetch(apiEndpoint(`api/data/update-field/market-trends/${trendId}`), {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json'
@@ -173,7 +246,7 @@ function SummaryPages({
     // Handle update detail content for fintech news
     const handleUpdateFintechNewsContent = async (newsId: string) => {
         try {
-            const response = await fetch(`http://localhost:5000/api/data/update-field/fintech-news/${newsId}`, {
+            const response = await fetch(apiEndpoint(`api/data/update-field/fintech-news/${newsId}`), {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json'
@@ -203,7 +276,7 @@ function SummaryPages({
         setCrawlingIds(prev => new Set(prev).add(itemId))
 
         try {
-            const response = await fetch(`http://localhost:5000/api/data/crawl-content/${collection}/${itemId}`, {
+            const response = await fetch(apiEndpoint(`api/data/crawl-content/${collection}/${itemId}`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -228,6 +301,174 @@ function SummaryPages({
                 return newSet
             })
         }
+    }
+
+    // Validate URL
+    const isValidUrl = (url: string): boolean => {
+        try {
+            const urlObj = new URL(url)
+            return urlObj.protocol === 'http:' || urlObj.protocol === 'https:'
+        } catch {
+            return false
+        }
+    }
+
+    // Custom crawl with user-provided URL
+    const handleCustomCrawl = async (itemId: string, collection: string) => {
+        const customUrl = customCrawlUrls[itemId]
+
+        // Validate URL
+        if (!customUrl || customUrl.trim() === '') {
+            alert('Vui lòng nhập URL để crawl')
+            return
+        }
+
+        if (!isValidUrl(customUrl)) {
+            alert('URL không hợp lệ! Vui lòng nhập URL bắt đầu bằng http:// hoặc https://')
+            return
+        }
+
+        setCrawlingIds(prev => new Set(prev).add(itemId))
+
+        try {
+            const response = await fetch(apiEndpoint(`api/data/crawl-custom/${collection}/${itemId}`), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ customUrl })
+            })
+
+            const result = await response.json()
+
+            if (result.success) {
+                alert(`Crawl thành công! Đã lấy được ${result.data.contentLength} ký tự`)
+                window.location.reload()
+            } else {
+                alert('Lỗi crawl: ' + result.message)
+            }
+        } catch (error) {
+            console.error('Error crawling custom URL:', error)
+            alert('Có lỗi xảy ra khi crawl')
+        } finally {
+            setCrawlingIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(itemId)
+                return newSet
+            })
+        }
+    }
+
+    // Handle temporary crawl for empty groups (Tỷ giá, Giá vàng)
+    const handleTemporaryCrawl = async (groupName: string) => {
+        const customUrl = customCrawlUrls[`${groupName}_empty`]
+
+        // Validate URL
+        if (!customUrl || customUrl.trim() === '') {
+            alert('Vui lòng nhập URL để crawl')
+            return
+        }
+
+        if (!isValidUrl(customUrl)) {
+            alert('URL không hợp lệ! Vui lòng nhập URL bắt đầu bằng http:// hoặc https://')
+            return
+        }
+
+        const groupKey = `${groupName}_empty`
+        setCrawlingIds(prev => new Set(prev).add(groupKey))
+
+        try {
+            const response = await fetch(apiEndpoint(`api/data/crawl-temporary`), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: customUrl,
+                    title: groupName
+                })
+            })
+
+            const result = await response.json()
+
+            if (result.success) {
+                // Store the crawled content in emptyGroupContent state (without source prefix)
+                setEmptyGroupContent(prev => ({
+                    ...prev,
+                    [groupName]: result.data.content
+                }))
+
+                // Store the source URL separately
+                setEmptyGroupSources(prev => ({
+                    ...prev,
+                    [groupName]: result.data.source
+                }))
+
+                alert(`Crawl thành công cho ${groupName}!\nĐã lấy được ${result.data.content.length} ký tự`)
+
+                // Clear the URL input
+                setCustomCrawlUrls(prev => {
+                    const newUrls = { ...prev }
+                    delete newUrls[`${groupName}_empty`]
+                    return newUrls
+                })
+            } else {
+                alert('Lỗi crawl: ' + result.message)
+            }
+        } catch (error) {
+            console.error('Error crawling temporary content:', error)
+            alert('Có lỗi xảy ra khi crawl')
+        } finally {
+            setCrawlingIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(groupKey)
+                return newSet
+            })
+        }
+    }
+
+    // Handle multiple image upload for group
+    const handleGroupImageUpload = async (groupKey: string, files: FileList | File[]) => {
+        setUploadingGroupImage(groupKey)
+
+        try {
+            // Convert FileList to Array if needed
+            const fileArray = Array.from(files)
+
+            // Convert all files to base64
+            const base64Images = await Promise.all(
+                fileArray.map(file => {
+                    return new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader()
+                        reader.onloadend = () => {
+                            resolve(reader.result as string)
+                        }
+                        reader.onerror = reject
+                        reader.readAsDataURL(file)
+                    })
+                })
+            )
+
+            // Add new images to existing images for this group
+            setGroupImages(prev => ({
+                ...prev,
+                [groupKey]: [...(prev[groupKey] || []), ...base64Images]
+            }))
+
+        } catch (error) {
+            console.error('Error uploading group images:', error)
+            alert('Có lỗi xảy ra khi upload ảnh!')
+        } finally {
+            setUploadingGroupImage(null)
+        }
+    }
+
+    // Remove image from group
+    const handleRemoveGroupImage = (groupKey: string, imageIndex: number) => {
+        setGroupImages(prev => ({
+            ...prev,
+            [groupKey]: prev[groupKey].filter((_, index) => index !== imageIndex)
+        }))
     }
 
     // Render Page Navigation
@@ -569,7 +810,7 @@ function SummaryPages({
                     </ul>
                 </div>
 
-                {/* Content Cards - Display real data with image[1] */}
+                {/* Content Cards - Display real data with image */}
                 {selectedProducts.map((product) => (
                 <div key={product._id} style={{
                     border: '1px solid #dee2e6',
@@ -581,7 +822,7 @@ function SummaryPages({
                     {/* Header */}
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: windowWidth < 640 ? '1fr' : 'minmax(150px, 200px) 1fr',
+                        gridTemplateColumns: windowWidth < 640 ? '1fr' : '1fr 1fr',
                         borderBottom: '1px solid #dee2e6'
                     }}>
                         <div style={{
@@ -613,46 +854,63 @@ function SummaryPages({
                         display: 'flex',
                         flexDirection: windowWidth < 768 ? 'column' : 'row'
                     }}>
-                        {/* Image Section */}
+                        {/* Image Section - 50% width */}
                         <div style={{
-                            width: windowWidth < 768 ? '100%' : '200px',
-                            minWidth: windowWidth < 768 ? 'auto' : '200px',
+                            width: windowWidth < 768 ? '100%' : '50%',
+                            flex: windowWidth < 768 ? 'none' : '1',
                             padding: '20px',
                             borderRight: windowWidth < 768 ? 'none' : '1px solid #dee2e6',
                             borderBottom: windowWidth < 768 ? '1px solid #dee2e6' : 'none',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center'
+                            justifyContent: 'center',
+                            position: 'relative'
                         }}>
-                            {(product.image && product.image.length > 1 && product.image[1]) ? (
-                                <img src={product.image[1]} alt={product.product_name}
-                                    style={{
-                                        maxWidth: '100%',
-                                        maxHeight: '200px',
-                                        display: 'block',
-                                        borderRadius: '6px'
-                                    }}
-                                />
-                            ) : (
+                            {product.image ? (
                                 <div style={{
                                     width: '100%',
-                                    height: '150px',
+                                    height: windowWidth < 768 ? '250px' : '300px',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    backgroundColor: '#f8f9fa',
-                                    borderRadius: '6px',
-                                    color: '#adb5bd',
-                                    fontSize: '14px'
+                                    justifyContent: 'center'
                                 }}>
-                                    Chưa có ảnh
+                                    <img src={product.image} alt={product.product_name}
+                                        style={{
+                                            maxWidth: '100%',
+                                            maxHeight: '100%',
+                                            width: 'auto',
+                                            height: 'auto',
+                                            display: 'block',
+                                            borderRadius: '6px',
+                                            objectFit: 'contain'
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        height: windowWidth < 768 ? '250px' : '300px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        backgroundColor: '#f8f9fa',
+                                        borderRadius: '6px',
+                                        border: '2px dashed #dee2e6',
+                                        color: '#adb5bd',
+                                        fontSize: '14px'
+                                    }}
+                                >
+                                    <p style={{ margin: 0, fontWeight: '500' }}>Chưa có ảnh</p>
                                 </div>
                             )}
                         </div>
 
-                        {/* Detail Section */}
+                        {/* Detail Section - 50% width */}
                         <div style={{
-                            flex: 1,
+                            width: windowWidth < 768 ? '100%' : '50%',
+                            flex: windowWidth < 768 ? 'none' : '1',
                             padding: '20px',
                             fontSize: '14px',
                             color: '#495057',
@@ -678,16 +936,18 @@ function SummaryPages({
                                         }}>
                                             <input
                                                 type="text"
-                                                placeholder="Nhập link để crawl..."
-                                                value={crawlUrls[product._id] || ''}
-                                                onChange={(e) => setCrawlUrls({ ...crawlUrls, [product._id]: e.target.value })}
+                                                placeholder="Nhập URL để crawl (http:// hoặc https://)"
+                                                value={customCrawlUrls[product._id] || ''}
+                                                onChange={(e) => setCustomCrawlUrls({ ...customCrawlUrls, [product._id]: e.target.value })}
+                                                disabled={crawlingIds.has(product._id)}
                                                 style={{
                                                     flex: 1,
                                                     padding: '8px 12px',
                                                     border: '1px solid #ced4da',
                                                     borderRadius: '4px',
                                                     fontSize: '13px',
-                                                    minWidth: windowWidth < 640 ? 'auto' : '200px'
+                                                    minWidth: windowWidth < 640 ? 'auto' : '200px',
+                                                    opacity: crawlingIds.has(product._id) ? 0.6 : 1
                                                 }}
                                             />
                                             <div style={{
@@ -696,24 +956,23 @@ function SummaryPages({
                                                 flexShrink: 0
                                             }}>
                                                 <button
-                                                    onClick={() => {
-                                                        // TODO: Implement crawl logic
-                                                        alert('Tính năng Crawl sẽ được hiện thực sau')
-                                                    }}
+                                                    onClick={() => handleCustomCrawl(product._id, 'new-products')}
+                                                    disabled={crawlingIds.has(product._id)}
                                                     style={{
                                                         padding: '8px 16px',
-                                                        backgroundColor: '#007bff',
+                                                        backgroundColor: crawlingIds.has(product._id) ? '#adb5bd' : '#007bff',
                                                         color: '#ffffff',
                                                         border: 'none',
                                                         borderRadius: '4px',
                                                         fontSize: '13px',
                                                         fontWeight: '600',
-                                                        cursor: 'pointer',
+                                                        cursor: crawlingIds.has(product._id) ? 'not-allowed' : 'pointer',
                                                         whiteSpace: 'nowrap',
-                                                        flex: windowWidth < 640 ? 1 : 'initial'
+                                                        flex: windowWidth < 640 ? 1 : 'initial',
+                                                        opacity: crawlingIds.has(product._id) ? 0.6 : 1
                                                     }}
                                                 >
-                                                    Crawl
+                                                    {crawlingIds.has(product._id) ? '⏳' : 'Crawl'}
                                                 </button>
                                                 <button
                                                     onClick={() => handleAutoCrawl(product._id, 'new-products')}
@@ -809,6 +1068,31 @@ function SummaryPages({
                                             }}>
                                                 {product.detail_content || 'Chưa có nội dung chi tiết'}
                                             </div>
+                                            {product.source_of_detail && (
+                                                <div style={{
+                                                    marginBottom: '8px',
+                                                    padding: '6px 8px',
+                                                    backgroundColor: '#e7f3ff',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid #b3d9ff',
+                                                    fontSize: '12px',
+                                                    color: '#004085'
+                                                }}>
+                                                    <strong>Nguồn:</strong>{' '}
+                                                    <a
+                                                        href={product.source_of_detail}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        style={{
+                                                            color: '#0056b3',
+                                                            textDecoration: 'none',
+                                                            wordBreak: 'break-all'
+                                                        }}
+                                                    >
+                                                        {product.source_of_detail}
+                                                    </a>
+                                                </div>
+                                            )}
                                             <button
                                                 onClick={() => {
                                                     setEditingProductId(product._id)
@@ -839,50 +1123,97 @@ function SummaryPages({
     }
 
     // Render Page 3: Banking Market Trends
-    const renderPage3BankingTrends = () => (
-        <div style={{ marginBottom: '32px' }}>
-            {selectedBankingTrends.map((trend) => (
-                <div key={trend._id} style={{
-                    border: '1px solid #dee2e6',
-                    borderRadius: '8px',
-                    marginBottom: '24px',
-                    overflow: 'hidden',
-                    backgroundColor: '#ffffff'
-                }}>
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: windowWidth < 768 ? 'column' : 'row'
+    const renderPage3BankingTrends = () => {
+        // Group trends by topic_group
+        const groupedTrends = selectedBankingTrends.reduce((acc, trend) => {
+            const topicGroup = trend.topic_group || 'Khác'
+            if (!acc[topicGroup]) {
+                acc[topicGroup] = []
+            }
+            acc[topicGroup].push(trend)
+            return acc
+        }, {} as Record<string, typeof selectedBankingTrends>)
+
+        // Define the order for topic groups
+        const topicOrder = ["Vĩ mô", "CĐS và công nghệ", "Kinh doanh", "Hợp tác", "Pháp lý", "Tỷ giá", "Giá vàng"]
+
+        // Ensure "Tỷ giá" and "Giá vàng" always exist in groupedTrends
+        if (!groupedTrends["Tỷ giá"]) {
+            groupedTrends["Tỷ giá"] = []
+        }
+        if (!groupedTrends["Giá vàng"]) {
+            groupedTrends["Giá vàng"] = []
+        }
+
+        // Sort the groups according to the defined order
+        const sortedGroups = Object.entries(groupedTrends).sort(([a], [b]) => {
+            const indexA = topicOrder.indexOf(a)
+            const indexB = topicOrder.indexOf(b)
+
+            // If both are in the order array, sort by their position
+            if (indexA !== -1 && indexB !== -1) {
+                return indexA - indexB
+            }
+            // If only a is in the order array, it comes first
+            if (indexA !== -1) return -1
+            // If only b is in the order array, it comes first
+            if (indexB !== -1) return 1
+            // If neither is in the order array, sort alphabetically
+            return a.localeCompare(b)
+        })
+
+        return (
+            <div style={{ marginBottom: '32px' }}>
+                {sortedGroups.map(([topicGroup, trends]) => (
+                    <div key={topicGroup} style={{
+                        border: '1px solid #dee2e6',
+                        borderRadius: '8px',
+                        marginBottom: '24px',
+                        overflow: 'hidden',
+                        backgroundColor: '#ffffff'
                     }}>
                         <div style={{
-                            width: windowWidth < 768 ? '100%' : '200px',
-                            minWidth: windowWidth < 768 ? 'auto' : '200px',
-                            padding: '20px',
-                            backgroundColor: '#fff3c5ff',
-                            borderRight: windowWidth < 768 ? 'none' : '1px solid #dee2e6',
-                            borderBottom: windowWidth < 768 ? '1px solid #dee2e6' : 'none',
-                            fontWeight: '700',
-                            fontSize: '14px',
-                            color: '#2c3e50',
-                            textAlign: 'center',
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
+                            flexDirection: windowWidth < 768 ? 'column' : 'row'
                         }}>
-                            {trend.topic_group || 'N/A'}
-                        </div>
-                        <div style={{
-                            flex: 1,
-                            padding: '20px',
-                            fontSize: '14px',
-                            color: '#495057',
-                            lineHeight: '1.8',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            minHeight: 0
-                        }}>
-                            <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '700', color: '#2c3e50' }}>
-                                {trend.title}
-                            </h4>
+                            {/* Left column: Topic Group */}
+                            <div style={{
+                                width: windowWidth < 768 ? '100%' : '200px',
+                                minWidth: windowWidth < 768 ? 'auto' : '200px',
+                                padding: '20px',
+                                backgroundColor: '#fff3c5ff',
+                                borderRight: windowWidth < 768 ? 'none' : '1px solid #dee2e6',
+                                borderBottom: windowWidth < 768 ? '1px solid #dee2e6' : 'none',
+                                fontWeight: '700',
+                                fontSize: '14px',
+                                color: '#2c3e50',
+                                textAlign: 'center',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}>
+                                {topicGroup}
+                            </div>
+
+                            {/* Right column: List of items in this topic group */}
+                            <div style={{
+                                flex: 1,
+                                padding: '20px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '20px'
+                            }}>
+                                {trends.length > 0 ? (
+                                    trends.map((trend) => (
+                                    <div key={trend._id} style={{
+                                        padding: '16px',
+                                        border: '1px solid #e9ecef',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#fafbfc'
+                                    }}>
+                                        {/* <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '700', color: '#2c3e50' }}>
+                                            {trend.title}
+                                        </h4> */}
 
                                     {/* Crawl URL input and buttons */}
                                     <div style={{
@@ -901,16 +1232,18 @@ function SummaryPages({
                                         }}>
                                             <input
                                                 type="text"
-                                                placeholder="Nhập link để crawl..."
-                                                value={crawlUrls[trend._id] || ''}
-                                                onChange={(e) => setCrawlUrls({ ...crawlUrls, [trend._id]: e.target.value })}
+                                                placeholder="Nhập URL để crawl (http:// hoặc https://)"
+                                                value={customCrawlUrls[trend._id] || ''}
+                                                onChange={(e) => setCustomCrawlUrls({ ...customCrawlUrls, [trend._id]: e.target.value })}
+                                                disabled={crawlingIds.has(trend._id)}
                                                 style={{
                                                     flex: 1,
                                                     padding: '8px 12px',
                                                     border: '1px solid #ced4da',
                                                     borderRadius: '4px',
                                                     fontSize: '13px',
-                                                    minWidth: windowWidth < 640 ? 'auto' : '200px'
+                                                    minWidth: windowWidth < 640 ? 'auto' : '200px',
+                                                    opacity: crawlingIds.has(trend._id) ? 0.6 : 1
                                                 }}
                                             />
                                             <div style={{
@@ -919,23 +1252,23 @@ function SummaryPages({
                                                 flexShrink: 0
                                             }}>
                                                 <button
-                                                    onClick={() => {
-                                                        alert('Tính năng Crawl sẽ được hiện thực sau')
-                                                    }}
+                                                    onClick={() => handleCustomCrawl(trend._id, 'market-trends')}
+                                                    disabled={crawlingIds.has(trend._id)}
                                                     style={{
                                                         padding: '8px 16px',
-                                                        backgroundColor: '#007bff',
+                                                        backgroundColor: crawlingIds.has(trend._id) ? '#adb5bd' : '#007bff',
                                                         color: '#ffffff',
                                                         border: 'none',
                                                         borderRadius: '4px',
                                                         fontSize: '13px',
                                                         fontWeight: '600',
-                                                        cursor: 'pointer',
+                                                        cursor: crawlingIds.has(trend._id) ? 'not-allowed' : 'pointer',
                                                         whiteSpace: 'nowrap',
-                                                        flex: windowWidth < 640 ? 1 : 'initial'
+                                                        flex: windowWidth < 640 ? 1 : 'initial',
+                                                        opacity: crawlingIds.has(trend._id) ? 0.6 : 1
                                                     }}
                                                 >
-                                                    Crawl
+                                                    {crawlingIds.has(trend._id) ? '⏳' : 'Crawl'}
                                                 </button>
                                                 <button
                                                     onClick={() => handleAutoCrawl(trend._id, 'market-trends')}
@@ -1031,6 +1364,31 @@ function SummaryPages({
                                             }}>
                                                 {trend.detail_content || 'Chưa có nội dung chi tiết'}
                                             </div>
+                                            {trend.source_of_detail && (
+                                                <div style={{
+                                                    marginBottom: '8px',
+                                                    padding: '6px 8px',
+                                                    backgroundColor: '#e7f3ff',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid #b3d9ff',
+                                                    fontSize: '12px',
+                                                    color: '#004085'
+                                                }}>
+                                                    <strong>Nguồn:</strong>{' '}
+                                                    <a
+                                                        href={trend.source_of_detail}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        style={{
+                                                            color: '#0056b3',
+                                                            textDecoration: 'none',
+                                                            wordBreak: 'break-all'
+                                                        }}
+                                                    >
+                                                        {trend.source_of_detail}
+                                                    </a>
+                                                </div>
+                                            )}
                                             <button
                                                 onClick={() => {
                                                     setEditingTrendId(trend._id)
@@ -1052,58 +1410,438 @@ function SummaryPages({
                                         </div>
                                     )}
                                     </div>
+                                    </div>
+                                ))
+                                ) : (
+                                    // Empty state for Tỷ giá and Giá vàng - show input and crawl button only
+                                    <div style={{
+                                        padding: '16px',
+                                        border: '1px solid #e9ecef',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#fafbfc'
+                                    }}>
+                                        {/* Crawl URL input and buttons */}
+                                        <div style={{
+                                            marginBottom: '16px',
+                                            padding: '12px',
+                                            backgroundColor: '#f8f9fa',
+                                            borderRadius: '6px',
+                                            border: '1px solid #dee2e6'
+                                        }}>
+                                            <div style={{
+                                                display: 'flex',
+                                                flexDirection: windowWidth < 640 ? 'column' : 'row',
+                                                gap: '8px',
+                                                alignItems: windowWidth < 640 ? 'stretch' : 'center'
+                                            }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nhập URL để crawl (http:// hoặc https://)"
+                                                    value={customCrawlUrls[`${topicGroup}_empty`] || ''}
+                                                    onChange={(e) => setCustomCrawlUrls({ ...customCrawlUrls, [`${topicGroup}_empty`]: e.target.value })}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '8px 12px',
+                                                        border: '1px solid #ced4da',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        minWidth: windowWidth < 640 ? 'auto' : '200px'
+                                                    }}
+                                                />
+                                                <button
+                                                    onClick={() => handleTemporaryCrawl(topicGroup)}
+                                                    disabled={crawlingIds.has(`${topicGroup}_empty`)}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: crawlingIds.has(`${topicGroup}_empty`) ? '#6c757d' : '#007bff',
+                                                        color: '#ffffff',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '600',
+                                                        cursor: crawlingIds.has(`${topicGroup}_empty`) ? 'not-allowed' : 'pointer',
+                                                        whiteSpace: 'nowrap',
+                                                        flex: windowWidth < 640 ? 1 : 'initial',
+                                                        opacity: crawlingIds.has(`${topicGroup}_empty`) ? 0.7 : 1
+                                                    }}
+                                                >
+                                                    {crawlingIds.has(`${topicGroup}_empty`) ? 'Đang crawl...' : 'Crawl'}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Content display area (empty state) */}
+                                        <div>
+                                            {editingEmptyGroup === topicGroup ? (
+                                                // Editing mode
+                                                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                                    <textarea
+                                                        value={emptyGroupContent[topicGroup] || ''}
+                                                        onChange={(e) => setEmptyGroupContent({ ...emptyGroupContent, [topicGroup]: e.target.value })}
+                                                        style={{
+                                                            width: '100%',
+                                                            minHeight: '200px',
+                                                            padding: '12px',
+                                                            border: '1px solid #ced4da',
+                                                            borderRadius: '4px',
+                                                            fontSize: '14px',
+                                                            lineHeight: '1.8',
+                                                            fontFamily: 'inherit',
+                                                            resize: 'vertical',
+                                                            marginBottom: '8px'
+                                                        }}
+                                                        placeholder="Nhập nội dung..."
+                                                    />
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <button
+                                                            onClick={() => setEditingEmptyGroup(null)}
+                                                            style={{
+                                                                padding: '8px 16px',
+                                                                backgroundColor: '#28a745',
+                                                                color: '#ffffff',
+                                                                border: 'none',
+                                                                borderRadius: '4px',
+                                                                fontSize: '13px',
+                                                                fontWeight: '600',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            Lưu
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingEmptyGroup(null)
+                                                                // Clear both content and source
+                                                                setEmptyGroupContent({ ...emptyGroupContent, [topicGroup]: '' })
+                                                                setEmptyGroupSources(prev => {
+                                                                    const newSources = { ...prev }
+                                                                    delete newSources[topicGroup]
+                                                                    return newSources
+                                                                })
+                                                            }}
+                                                            style={{
+                                                                padding: '8px 16px',
+                                                                backgroundColor: '#dc3545',
+                                                                color: '#ffffff',
+                                                                border: 'none',
+                                                                borderRadius: '4px',
+                                                                fontSize: '13px',
+                                                                fontWeight: '600',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            Hủy
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                // Display mode
+                                                <div>
+                                                    <div style={{
+                                                        marginBottom: '8px',
+                                                        whiteSpace: 'pre-wrap',
+                                                        wordBreak: 'break-word',
+                                                        overflowWrap: 'anywhere',
+                                                        maxHeight: '400px',
+                                                        overflowY: 'auto',
+                                                        overflowX: 'auto',
+                                                        padding: '8px',
+                                                        backgroundColor: '#f8f9fa',
+                                                        borderRadius: '4px',
+                                                        border: '1px solid #dee2e6',
+                                                        width: '100%',
+                                                        boxSizing: 'border-box',
+                                                        color: emptyGroupContent[topicGroup] ? '#495057' : '#adb5bd',
+                                                        textAlign: emptyGroupContent[topicGroup] ? 'left' : 'center',
+                                                        fontStyle: emptyGroupContent[topicGroup] ? 'normal' : 'italic'
+                                                    }}>
+                                                        {emptyGroupContent[topicGroup] || 'Chưa có nội dung. Vui lòng nhập URL và nhấn Crawl hoặc nhập thủ công.'}
+                                                    </div>
+                                                    {/* Display source URL if available */}
+                                                    {emptyGroupSources[topicGroup] && (
+                                                        <div style={{
+                                                            marginBottom: '8px',
+                                                            padding: '6px 8px',
+                                                            backgroundColor: '#e7f3ff',
+                                                            borderRadius: '4px',
+                                                            border: '1px solid #b3d9ff',
+                                                            fontSize: '12px',
+                                                            color: '#004085'
+                                                        }}>
+                                                            <strong>Nguồn:</strong>{' '}
+                                                            <a
+                                                                href={emptyGroupSources[topicGroup]}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                style={{
+                                                                    color: '#0056b3',
+                                                                    textDecoration: 'none',
+                                                                    wordBreak: 'break-all'
+                                                                }}
+                                                            >
+                                                                {emptyGroupSources[topicGroup]}
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                    <button
+                                                        onClick={() => setEditingEmptyGroup(topicGroup)}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            backgroundColor: '#ffc107',
+                                                            color: '#000000',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            fontSize: '12px',
+                                                            fontWeight: '600',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Chỉnh sửa
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Image Upload Section for this group */}
+                                <div style={{
+                                    marginTop: '20px',
+                                    padding: '16px',
+                                    border: '2px dashed #dee2e6',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#f8f9fa'
+                                }}>
+                                    <div style={{
+                                        marginBottom: '12px',
+                                        fontWeight: '600',
+                                        fontSize: '14px',
+                                        color: '#495057'
+                                    }}>
+                                        Thêm ảnh cho nhóm "{topicGroup}"
+                                    </div>
+
+                                    {/* Display uploaded images */}
+                                    {groupImages[`page3-${topicGroup}`]?.length > 0 && (
+                                        <div style={{
+                                            display: 'flex',
+                                            flexWrap: 'wrap',
+                                            gap: '12px',
+                                            marginBottom: '12px'
+                                        }}>
+                                            {groupImages[`page3-${topicGroup}`].map((imageUrl, index) => (
+                                                <div key={index} style={{
+                                                    position: 'relative',
+                                                    width: windowWidth < 640 ? 'calc(50% - 6px)' : '150px',
+                                                    height: '150px',
+                                                    border: '1px solid #dee2e6',
+                                                    borderRadius: '6px',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    <img
+                                                        src={imageUrl}
+                                                        alt={`Group image ${index + 1}`}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            objectFit: 'cover'
+                                                        }}
+                                                    />
+                                                    <button
+                                                        onClick={() => handleRemoveGroupImage(`page3-${topicGroup}`, index)}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: '4px',
+                                                            right: '4px',
+                                                            width: '24px',
+                                                            height: '24px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: 'rgba(220, 53, 69, 0.9)',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontSize: '16px',
+                                                            fontWeight: 'bold',
+                                                            padding: 0
+                                                        }}
+                                                        title="Xóa ảnh"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Upload area */}
+                                    <div
+                                        style={{
+                                            padding: '24px',
+                                            textAlign: 'center',
+                                            backgroundColor: '#ffffff',
+                                            borderRadius: '6px',
+                                            border: '1px solid #ced4da',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onClick={() => {
+                                            const input = document.createElement('input')
+                                            input.type = 'file'
+                                            input.accept = 'image/*'
+                                            input.multiple = true
+                                            input.onchange = (e) => {
+                                                const files = (e.target as HTMLInputElement).files
+                                                if (files && files.length > 0) {
+                                                    handleGroupImageUpload(`page3-${topicGroup}`, files)
+                                                }
+                                            }
+                                            input.click()
+                                        }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault()
+                                            e.currentTarget.style.borderColor = '#F00020'
+                                            e.currentTarget.style.backgroundColor = '#fff5f5'
+                                        }}
+                                        onDragLeave={(e) => {
+                                            e.currentTarget.style.borderColor = '#ced4da'
+                                            e.currentTarget.style.backgroundColor = '#ffffff'
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault()
+                                            e.currentTarget.style.borderColor = '#ced4da'
+                                            e.currentTarget.style.backgroundColor = '#ffffff'
+                                            const files = e.dataTransfer.files
+                                            if (files.length > 0) {
+                                                handleGroupImageUpload(`page3-${topicGroup}`, files)
+                                            }
+                                        }}
+                                    >
+                                        {uploadingGroupImage === `page3-${topicGroup}` ? (
+                                            <>
+                                                <div style={{ fontSize: '32px', marginBottom: '8px' }}>⏳</div>
+                                                <p style={{ margin: 0, fontSize: '14px', color: '#6c757d' }}>
+                                                    Đang upload ảnh...
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6c757d" strokeWidth="2" style={{ display: 'block', margin: '0 auto 12px' }}>
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                                    <polyline points="21 15 16 10 5 21"/>
+                                                </svg>
+                                                <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#495057', fontWeight: '500' }}>
+                                                    Kéo thả nhiều ảnh vào đây
+                                                </p>
+                                                <p style={{ margin: 0, fontSize: '12px', color: '#adb5bd' }}>
+                                                    hoặc click để chọn files
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            ))}
-        </div>
-    )
+                ))}
+            </div>
+        )
+    }
 
     // Render Page 4: Fintech News
-    const renderPage4FintechNews = () => (
-        <div style={{ marginBottom: '32px' }}>
-            {selectedFintechNews.map((news) => (
-                <div key={news._id} style={{
-                    border: '1px solid #dee2e6',
-                    borderRadius: '8px',
-                    marginBottom: '24px',
-                    overflow: 'hidden',
-                    backgroundColor: '#ffffff'
-                }}>
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: windowWidth < 768 ? 'column' : 'row'
+    const renderPage4FintechNews = () => {
+        // Group fintech news by area_affected
+        const groupedFintech = selectedFintechNews.reduce((acc, news) => {
+            // Handle area_affected as string or array
+            let areaAffected: string
+            if (Array.isArray(news.area_affected)) {
+                // If array, join with comma or take first element
+                areaAffected = news.area_affected.length > 0 ? news.area_affected[0] : 'Khác'
+            } else {
+                areaAffected = news.area_affected || 'Khác'
+            }
+
+            if (!acc[areaAffected]) {
+                acc[areaAffected] = []
+            }
+            acc[areaAffected].push(news)
+            return acc
+        }, {} as Record<string, typeof selectedFintechNews>)
+
+        // Define the order for area_affected: Việt Nam first, then Thế giới
+        const areaOrder = ["Việt Nam", "Thế giới"]
+
+        // Sort the groups according to the defined order
+        const sortedGroups = Object.entries(groupedFintech).sort(([a], [b]) => {
+            const indexA = areaOrder.indexOf(a)
+            const indexB = areaOrder.indexOf(b)
+
+            // If both are in the order array, sort by their position
+            if (indexA !== -1 && indexB !== -1) {
+                return indexA - indexB
+            }
+            // If only a is in the order array, it comes first
+            if (indexA !== -1) return -1
+            // If only b is in the order array, it comes first
+            if (indexB !== -1) return 1
+            // If neither is in the order array, sort alphabetically
+            return a.localeCompare(b)
+        })
+
+        return (
+            <div style={{ marginBottom: '32px' }}>
+                {sortedGroups.map(([areaAffected, newsList]) => (
+                    <div key={areaAffected} style={{
+                        border: '1px solid #dee2e6',
+                        borderRadius: '8px',
+                        marginBottom: '24px',
+                        overflow: 'hidden',
+                        backgroundColor: '#ffffff'
                     }}>
                         <div style={{
-                            width: windowWidth < 768 ? '100%' : '200px',
-                            minWidth: windowWidth < 768 ? 'auto' : '200px',
-                            padding: '20px',
-                            backgroundColor: '#fff3c5ff',
-                            borderRight: windowWidth < 768 ? 'none' : '1px solid #dee2e6',
-                            borderBottom: windowWidth < 768 ? '1px solid #dee2e6' : 'none',
-                            fontWeight: '700',
-                            fontSize: '14px',
-                            color: '#2c3e50',
-                            textAlign: 'center',
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
+                            flexDirection: windowWidth < 768 ? 'column' : 'row'
                         }}>
-                            {news.fintech_topic || 'N/A'}
-                        </div>
-                        <div style={{
-                            flex: 1,
-                            padding: '20px',
-                            fontSize: '14px',
-                            color: '#495057',
-                            lineHeight: '1.8',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            minHeight: 0
-                        }}>
-                            <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '700', color: '#2c3e50' }}>
-                                {news.title}
-                            </h4>
+                            {/* Left column: Area Affected */}
+                            <div style={{
+                                width: windowWidth < 768 ? '100%' : '200px',
+                                minWidth: windowWidth < 768 ? 'auto' : '200px',
+                                padding: '20px',
+                                backgroundColor: '#fff3c5ff',
+                                borderRight: windowWidth < 768 ? 'none' : '1px solid #dee2e6',
+                                borderBottom: windowWidth < 768 ? '1px solid #dee2e6' : 'none',
+                                fontWeight: '700',
+                                fontSize: '14px',
+                                color: '#2c3e50',
+                                textAlign: 'center',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}>
+                                {areaAffected}
+                            </div>
+
+                            {/* Right column: List of items in this area */}
+                            <div style={{
+                                flex: 1,
+                                padding: '20px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '20px'
+                            }}>
+                                {newsList.map((news) => (
+                                    <div key={news._id} style={{
+                                        padding: '16px',
+                                        border: '1px solid #e9ecef',
+                                        borderRadius: '6px',
+                                        backgroundColor: '#fafbfc'
+                                    }}>
+                                        {/* <h4 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '700', color: '#2c3e50' }}>
+                                            {news.title}
+                                        </h4> */}
 
                                     {/* Crawl URL input and buttons */}
                                     <div style={{
@@ -1122,16 +1860,18 @@ function SummaryPages({
                                         }}>
                                             <input
                                                 type="text"
-                                                placeholder="Nhập link để crawl..."
-                                                value={crawlUrls[news._id] || ''}
-                                                onChange={(e) => setCrawlUrls({ ...crawlUrls, [news._id]: e.target.value })}
+                                                placeholder="Nhập URL để crawl (http:// hoặc https://)"
+                                                value={customCrawlUrls[news._id] || ''}
+                                                onChange={(e) => setCustomCrawlUrls({ ...customCrawlUrls, [news._id]: e.target.value })}
+                                                disabled={crawlingIds.has(news._id)}
                                                 style={{
                                                     flex: 1,
                                                     padding: '8px 12px',
                                                     border: '1px solid #ced4da',
                                                     borderRadius: '4px',
                                                     fontSize: '13px',
-                                                    minWidth: windowWidth < 640 ? 'auto' : '200px'
+                                                    minWidth: windowWidth < 640 ? 'auto' : '200px',
+                                                    opacity: crawlingIds.has(news._id) ? 0.6 : 1
                                                 }}
                                             />
                                             <div style={{
@@ -1140,23 +1880,23 @@ function SummaryPages({
                                                 flexShrink: 0
                                             }}>
                                                 <button
-                                                    onClick={() => {
-                                                        alert('Tính năng Crawl sẽ được hiện thực sau')
-                                                    }}
+                                                    onClick={() => handleCustomCrawl(news._id, 'fintech-news')}
+                                                    disabled={crawlingIds.has(news._id)}
                                                     style={{
                                                         padding: '8px 16px',
-                                                        backgroundColor: '#007bff',
+                                                        backgroundColor: crawlingIds.has(news._id) ? '#adb5bd' : '#007bff',
                                                         color: '#ffffff',
                                                         border: 'none',
                                                         borderRadius: '4px',
                                                         fontSize: '13px',
                                                         fontWeight: '600',
-                                                        cursor: 'pointer',
+                                                        cursor: crawlingIds.has(news._id) ? 'not-allowed' : 'pointer',
                                                         whiteSpace: 'nowrap',
-                                                        flex: windowWidth < 640 ? 1 : 'initial'
+                                                        flex: windowWidth < 640 ? 1 : 'initial',
+                                                        opacity: crawlingIds.has(news._id) ? 0.6 : 1
                                                     }}
                                                 >
-                                                    Crawl
+                                                    {crawlingIds.has(news._id) ? '⏳' : 'Crawl'}
                                                 </button>
                                                 <button
                                                     onClick={() => handleAutoCrawl(news._id, 'fintech-news')}
@@ -1252,6 +1992,31 @@ function SummaryPages({
                                             }}>
                                                 {news.detail_content || 'Chưa có nội dung chi tiết'}
                                             </div>
+                                            {news.source_of_detail && (
+                                                <div style={{
+                                                    marginBottom: '8px',
+                                                    padding: '6px 8px',
+                                                    backgroundColor: '#e7f3ff',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid #b3d9ff',
+                                                    fontSize: '12px',
+                                                    color: '#004085'
+                                                }}>
+                                                    <strong>Nguồn:</strong>{' '}
+                                                    <a
+                                                        href={news.source_of_detail}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        style={{
+                                                            color: '#0056b3',
+                                                            textDecoration: 'none',
+                                                            wordBreak: 'break-all'
+                                                        }}
+                                                    >
+                                                        {news.source_of_detail}
+                                                    </a>
+                                                </div>
+                                            )}
                                             <button
                                                 onClick={() => {
                                                     setEditingNewsId(news._id)
@@ -1273,12 +2038,155 @@ function SummaryPages({
                                         </div>
                                     )}
                                     </div>
+                                    </div>
+                                ))}
+
+                                {/* Image Upload Section for this group */}
+                                <div style={{
+                                    marginTop: '20px',
+                                    padding: '16px',
+                                    border: '2px dashed #dee2e6',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#f8f9fa'
+                                }}>
+                                    <div style={{
+                                        marginBottom: '12px',
+                                        fontWeight: '600',
+                                        fontSize: '14px',
+                                        color: '#495057'
+                                    }}>
+                                        Thêm ảnh cho nhóm "{areaAffected}"
+                                    </div>
+
+                                    {/* Display uploaded images */}
+                                    {groupImages[`page4-${areaAffected}`]?.length > 0 && (
+                                        <div style={{
+                                            display: 'flex',
+                                            flexWrap: 'wrap',
+                                            gap: '12px',
+                                            marginBottom: '12px'
+                                        }}>
+                                            {groupImages[`page4-${areaAffected}`].map((imageUrl, index) => (
+                                                <div key={index} style={{
+                                                    position: 'relative',
+                                                    width: windowWidth < 640 ? 'calc(50% - 6px)' : '150px',
+                                                    height: '150px',
+                                                    border: '1px solid #dee2e6',
+                                                    borderRadius: '6px',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    <img
+                                                        src={imageUrl}
+                                                        alt={`Group image ${index + 1}`}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            objectFit: 'cover'
+                                                        }}
+                                                    />
+                                                    <button
+                                                        onClick={() => handleRemoveGroupImage(`page4-${areaAffected}`, index)}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: '4px',
+                                                            right: '4px',
+                                                            width: '24px',
+                                                            height: '24px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: 'rgba(220, 53, 69, 0.9)',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontSize: '16px',
+                                                            fontWeight: 'bold',
+                                                            padding: 0
+                                                        }}
+                                                        title="Xóa ảnh"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Upload area */}
+                                    <div
+                                        style={{
+                                            padding: '24px',
+                                            textAlign: 'center',
+                                            backgroundColor: '#ffffff',
+                                            borderRadius: '6px',
+                                            border: '1px solid #ced4da',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onClick={() => {
+                                            const input = document.createElement('input')
+                                            input.type = 'file'
+                                            input.accept = 'image/*'
+                                            input.multiple = true
+                                            input.onchange = (e) => {
+                                                const files = (e.target as HTMLInputElement).files
+                                                if (files && files.length > 0) {
+                                                    handleGroupImageUpload(`page4-${areaAffected}`, files)
+                                                }
+                                            }
+                                            input.click()
+                                        }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault()
+                                            e.currentTarget.style.borderColor = '#F00020'
+                                            e.currentTarget.style.backgroundColor = '#fff5f5'
+                                        }}
+                                        onDragLeave={(e) => {
+                                            e.currentTarget.style.borderColor = '#ced4da'
+                                            e.currentTarget.style.backgroundColor = '#ffffff'
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault()
+                                            e.currentTarget.style.borderColor = '#ced4da'
+                                            e.currentTarget.style.backgroundColor = '#ffffff'
+                                            const files = e.dataTransfer.files
+                                            if (files.length > 0) {
+                                                handleGroupImageUpload(`page4-${areaAffected}`, files)
+                                            }
+                                        }}
+                                    >
+                                        {uploadingGroupImage === `page4-${areaAffected}` ? (
+                                            <>
+                                                <div style={{ fontSize: '32px', marginBottom: '8px' }}>⏳</div>
+                                                <p style={{ margin: 0, fontSize: '14px', color: '#6c757d' }}>
+                                                    Đang upload ảnh...
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6c757d" strokeWidth="2" style={{ display: 'block', margin: '0 auto 12px' }}>
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                                    <polyline points="21 15 16 10 5 21"/>
+                                                </svg>
+                                                <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#495057', fontWeight: '500' }}>
+                                                    Kéo thả nhiều ảnh vào đây
+                                                </p>
+                                                <p style={{ margin: 0, fontSize: '12px', color: '#adb5bd' }}>
+                                                    hoặc click để chọn files
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            ))}
-        </div>
-    )
+                ))}
+            </div>
+        )
+    }
 
     // Render Action Buttons (Chọn lại & Xác nhận báo cáo) - only on page 4
     const renderActionButtons = () => (
@@ -1293,7 +2201,13 @@ function SummaryPages({
         }}>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                 <button
-                    onClick={onResetWithCleanup}
+                    onClick={() => {
+                        // Clear group images and empty group content from localStorage when resetting
+                        localStorage.removeItem('summaryPages_groupImages')
+                        localStorage.removeItem('summaryPages_emptyGroupContent')
+                        localStorage.removeItem('summaryPages_emptyGroupSources')
+                        onResetWithCleanup()
+                    }}
                     style={{
                         padding: '16px 40px',
                         backgroundColor: '#6c757d',
@@ -1329,13 +2243,34 @@ function SummaryPages({
                 <button
                     onClick={async () => {
                         try {
-                            // Create report with selected items
+                            // Prepare page3Images - group images by topic_group
+                            const page3Images: Record<string, string[]> = {}
+                            Object.entries(groupImages).forEach(([key, images]) => {
+                                if (key.startsWith('page3-')) {
+                                    const topicGroup = key.replace('page3-', '')
+                                    page3Images[topicGroup] = images
+                                }
+                            })
+
+                            // Prepare page4Images - group images by area_affected
+                            const page4Images: Record<string, string[]> = {}
+                            Object.entries(groupImages).forEach(([key, images]) => {
+                                if (key.startsWith('page4-')) {
+                                    const areaAffected = key.replace('page4-', '')
+                                    page4Images[areaAffected] = images
+                                }
+                            })
+
+                            // Create report with selected items and images
                             const response = await fetch(`${import.meta.env.VITE_API_URL}/api/reports/create`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     startDate: startDateISO,
-                                    endDate: endDateISO
+                                    endDate: endDateISO,
+                                    page3Images,
+                                    page4Images,
+                                    emptyGroupContent
                                 })
                             })
 
@@ -1343,6 +2278,10 @@ function SummaryPages({
 
                             if (result.success) {
                                 alert(`Báo cáo đã được tạo thành công!\nTổng số tin: ${result.report.totalItems}\nKhoảng thời gian: ${result.report.dateRange}`)
+                                // Clear group images and empty group content from localStorage when report is confirmed
+                                localStorage.removeItem('summaryPages_groupImages')
+                                localStorage.removeItem('summaryPages_emptyGroupContent')
+                                localStorage.removeItem('summaryPages_emptyGroupSources')
                                 onReportConfirmed()
                             } else {
                                 alert('Có lỗi xảy ra khi tạo báo cáo: ' + (result.error || 'Unknown error'))

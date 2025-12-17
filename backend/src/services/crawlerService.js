@@ -7,6 +7,7 @@ const { chromium } = require('playwright');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 /**
  * Crawl Facebook post content using Apify API
@@ -422,6 +423,52 @@ async function crawlPDFContent(url) {
 }
 
 /**
+ * Summarize content using Gemini AI
+ * @param {string} content - Content to summarize
+ * @returns {Promise<string>} - Summarized content
+ */
+async function summarizeWithGemini(content) {
+    try {
+        console.log('🤖 Starting AI summarization with Gemini Pro...');
+
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+        if (!GEMINI_API_KEY) {
+            throw new Error('GEMINI_API_KEY not found in environment variables');
+        }
+
+        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+        const prompt = `Bạn là chuyên gia thuyết trình và báo cáo sản phẩm, tin tức ngành ngân hàng và fintech nói chung.
+Bạn cần tóm tắt toàn bộ nội dung tài liệu, trình bày các ý chính của từng phần theo từng chủ đề hoặc sản phẩm để báo cáo. Không tạo ra thông tin mới mà hoàn toàn vào nội dung input để tóm tắt.
+Đối với mỗi sản phẩm, dịch vụ hoặc chương trình, hãy nêu rõ đặc điểm nổi bật, điều kiện tham gia, giá trị ưu đãi, thời gian áp dụng, đối tượng hưởng lợi, quy trình thực hiện và ý nghĩa đối với khách hàng hoặc ngành. Không tạo ra thông tin mới mà hoàn toàn vào nội dung input. Đối với tin tức thị trường ngân hàng, tin tức fintech, hãy nêu ra đặc điểm nổi bật dựa trên cập nhật, những yếu tố trending từ tin tức mạng.
+Trích nguyên văn các đường link nguồn. Loại bỏ các thông tin không liên quan như hashtag, hình ảnh minh họa, hoặc các chi tiết phụ không ảnh hưởng đến nội dung chính.
+Đảm bảo bản tóm tắt giữ nguyên đầy đủ các thông tin quan trọng, đặc trưng sản phẩm/dịch vụ theo ngành, và trình bày rõ ràng, mạch lạc từng nội dung.
+Cần cấu trúc thành các đoạn hoặc các gạch đầu dòng để làm rõ các ý, đặc trưng của nội dung. 
+Kết quả trả ra chỉ có nội dung được tóm tắt. Giới hạn 150 cộng trừ 10 chữ, giới hạn này không áp dụng cho đường link\.
+
+Nội dung cần tóm tắt:
+${content}`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const summarizedText = response.text();
+
+        console.log('✅ AI summarization completed');
+        console.log(`📝 Original length: ${content.length} characters`);
+        console.log(`📝 Summarized length: ${summarizedText.length} characters`);
+
+        return summarizedText;
+
+    } catch (error) {
+        console.error('❌ Error during AI summarization:', error.message);
+        console.warn('⚠️  Returning original content without summarization');
+        // Return original content if AI fails
+        return content;
+    }
+}
+
+/**
  * Main crawl function - routes to appropriate crawler based on category
  * @param {string} url - URL to crawl
  * @param {string} category - URL category: SOCIAL, NEED_TEST, WEB_PDF
@@ -454,8 +501,13 @@ async function crawlContent(url, category) {
                 throw new Error(`Unknown category: ${category}`);
         }
 
-        console.log('✅ Crawl completed successfully\n');
-        return content;
+        console.log('✅ Crawl completed successfully');
+
+        // Summarize content with Gemini AI
+        const summarizedContent = await summarizeWithGemini(content);
+
+        console.log('✅ Full crawl process completed\n');
+        return summarizedContent;
 
     } catch (error) {
         console.error('❌ Crawl failed:', error.message);
@@ -463,9 +515,43 @@ async function crawlContent(url, category) {
     }
 }
 
+/**
+ * Detect URL category automatically
+ * @param {string} url - URL to analyze
+ * @returns {Promise<string>} - Category ('SOCIAL', 'WEB_PDF', or 'NEED_TEST')
+ */
+async function detectUrlCategory(url) {
+    try {
+        const urlLower = url.toLowerCase();
+
+        // Check for Facebook/Social Media
+        if (urlLower.includes('facebook.com') ||
+            urlLower.includes('fb.com') ||
+            urlLower.includes('m.facebook.com')) {
+            return 'SOCIAL';
+        }
+
+        // Check for PDF URLs
+        if (urlLower.endsWith('.pdf') ||
+            urlLower.includes('.pdf?') ||
+            urlLower.includes('pdf') && (urlLower.includes('drive.google') || urlLower.includes('storage.googleapis'))) {
+            return 'WEB_PDF';
+        }
+
+        // Default to website crawl
+        return 'NEED_TEST';
+
+    } catch (error) {
+        console.error('Error detecting URL category:', error);
+        return 'NEED_TEST'; // Default fallback
+    }
+}
+
 module.exports = {
     crawlContent,
     crawlFacebookPost,
     crawlWebsiteContent,
-    crawlPDFContent
+    crawlPDFContent,
+    detectUrlCategory,
+    summarizeWithGemini
 };

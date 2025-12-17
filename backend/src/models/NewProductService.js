@@ -9,7 +9,7 @@ const newProductServiceSchema = new mongoose.Schema({
   product_segment: [String], // Array of strings with 2 items: [category, subcategory]
   // product_category: String,
   description: String,
-  image: [String],
+  image: String,
   selected:Boolean,
   source_of_detail: String,
   reportSelected: Boolean,

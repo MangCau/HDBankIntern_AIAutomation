@@ -6,5 +6,14 @@ Mở rộng nguồn thông tin từ bên ngoài (????)
 2. Account Page
 Hiện thực đơn giản các thông tin tài khoản
 3. Xem lại giao diện, chỉnh sửa các chỉ tiết
-----------
-chinrh laij icon logo ngan hang
+
+---xem lại phần crawl bằng web (1 số vẫn bị chặn hãy thêm option nếu không crawl được thì dùng apify)
+hãy gọi lên webhook n8n
+
+
+---(THANH) chỉnh lại prompt tóm tắt tin tức banking và fintech
+
+
+----lỗi mất ảnh khi reloadpage/trang này về trang này
+
+

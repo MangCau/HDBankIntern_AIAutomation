@@ -118,7 +118,7 @@ function Layout() {
             // Edit mode: Show all other pages
             <>
               <Link to="/upload" className={`nav-link ${location.pathname === '/upload' ? 'active' : ''}`}>Tải lên file</Link>
-              <Link to="/select-news" className={`nav-link ${location.pathname === '/select-news' ? 'active' : ''}`}>Tin tức</Link>
+              <Link to="/select-news" className={`nav-link ${location.pathname === '/select-news' ? 'active' : ''}`}>Tóm tắt tin tức</Link>
               <Link to="/analytics" className={`nav-link ${location.pathname === '/analytics' ? 'active' : ''}`}>Phân tích</Link>
             </>
           )}

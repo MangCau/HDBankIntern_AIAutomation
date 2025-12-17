@@ -7,6 +7,7 @@ const BankingMarketTrend = require('../models/BankingMarketTrend');
 const FintechNews = require('../models/FintechNews');
 const HeaderProcessing = require('../models/HeaderProcessing');
 const { crawlContent } = require('../services/crawlerService');
+const { uploadBase64Image, deleteImage } = require('../utils/gcs');
 
 // Middleware to check database connection
 const checkDbConnection = (req, res, next) => {
@@ -85,20 +86,31 @@ router.get('/header-processing', checkDbConnection, async (req, res) => {
 router.patch('/header-processing/:id', checkDbConnection, async (req, res) => {
   try {
     const { id } = req.params;
-    const { selected } = req.body;
+    const { selected, topic_classification } = req.body;
+
+    // Build update object dynamically
+    const updateData = {};
+    if (selected !== undefined) updateData.selected = selected;
+    if (topic_classification !== undefined) updateData.topic_classification = topic_classification;
+
+    console.log('Updating ID:', id);
+    console.log('Update Data:', updateData);
 
     const updated = await HeaderProcessing.findByIdAndUpdate(
       id,
-      { selected },
-      { new: true }
+      { $set: updateData },
+      { new: true, runValidators: false }
     );
 
     if (!updated) {
       return res.status(404).json({ success: false, message: 'Item not found' });
     }
 
+    console.log('Updated result:', updated.topic_classification);
+
     res.json({ success: true, data: updated });
   } catch (error) {
+    console.error('Update error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -148,7 +160,7 @@ router.get('/summary-selected', checkDbConnection, async (req, res) => {
 router.patch('/update-image/:collection/:id', checkDbConnection, async (req, res) => {
   try {
     const { collection, id } = req.params;
-    const { image } = req.body;
+    const { image } = req.body; // base64 image string
 
     let Model;
     switch (collection) {
@@ -165,39 +177,83 @@ router.patch('/update-image/:collection/:id', checkDbConnection, async (req, res
         return res.status(400).json({ success: false, message: 'Invalid collection' });
     }
 
-    // For all collections with image arrays:
-    // - First time (image[1] doesn't exist): set both image[0] and image[1]
-    // - Subsequent times: only update image[0], keep image[1] unchanged
-    let updateData;
+    // Get current item to delete old image if exists
     const item = await Model.findById(id);
     if (!item) {
       return res.status(404).json({ success: false, message: 'Item not found' });
     }
 
-    // Check if this is first time (image[1] doesn't exist or is empty)
-    // Also check if image is not an array (old data format)
-    const isFirstTime = !item.image || !Array.isArray(item.image) || item.image.length < 2 || !item.image[1];
+    // Upload new image to Google Cloud Storage
+    const imageUrl = await uploadBase64Image(image, `news-images/${collection}`);
 
-    if (isFirstTime) {
-      // First time: set both image[0] and image[1]
-      updateData = { image: [image, image] };
-    } else {
-      // Subsequent times: only update image[0], keep image[1]
-      updateData = { image: [image, item.image[1]] };
+    // Delete old image from GCS if it exists and is a GCS URL
+    if (item.image && item.image.includes('storage.googleapis.com')) {
+      await deleteImage(item.image);
     }
 
+    // Update image URL in MongoDB
     const updated = await Model.findByIdAndUpdate(
       id,
-      updateData,
+      { image: imageUrl },
       { new: true }
     );
 
-    if (!updated) {
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Error updating image:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Upload and update image for an item
+router.post('/upload-image/:collection/:id', checkDbConnection, async (req, res) => {
+  try {
+    const { collection, id } = req.params;
+    const { image } = req.body; // base64 image string
+
+    if (!image) {
+      return res.status(400).json({ success: false, message: 'Image data is required' });
+    }
+
+    let Model;
+    switch (collection) {
+      case 'new-products':
+        Model = NewProductService;
+        break;
+      case 'market-trends':
+        Model = BankingMarketTrend;
+        break;
+      case 'fintech-news':
+        Model = FintechNews;
+        break;
+      default:
+        return res.status(400).json({ success: false, message: 'Invalid collection' });
+    }
+
+    // Get current item to delete old image if exists
+    const item = await Model.findById(id);
+    if (!item) {
       return res.status(404).json({ success: false, message: 'Item not found' });
     }
 
+    // Upload new image to Google Cloud Storage
+    const imageUrl = await uploadBase64Image(image, `news-images/${collection}`);
+
+    // Delete old image from GCS if it exists and is a GCS URL
+    if (item.image && item.image.includes('storage.googleapis.com')) {
+      await deleteImage(item.image);
+    }
+
+    // Update image URL in MongoDB
+    const updated = await Model.findByIdAndUpdate(
+      id,
+      { image: imageUrl },
+      { new: true }
+    );
+
     res.json({ success: true, data: updated });
   } catch (error) {
+    console.error('Error uploading image:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -340,54 +396,24 @@ Nội dung chữ: chỉ cần tiêu đề ngắn gọn`;
 
     const base64Image = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
 
-    // Update the item with the generated image
-    // For all collections with image arrays:
-    // - First time (image[1] doesn't exist): set both image[0] and image[1]
-    // - Subsequent times: only update image[0], keep image[1] unchanged
+    // Upload generated image to Google Cloud Storage
+    const imageUrl = await uploadBase64Image(base64Image, `news-images/${collection}`);
 
-    // DEBUG LOGGING
-    console.log('=== IMAGE GENERATION DEBUG ===');
-    console.log('Item ID:', id);
-    console.log('Current item.image:', item.image);
-    console.log('Is item.image an array?', Array.isArray(item.image));
-    console.log('item.image type:', typeof item.image);
-    if (item.image) {
-      console.log('item.image.length:', item.image.length);
-      if (Array.isArray(item.image)) {
-        console.log('item.image[0]:', item.image[0] ? item.image[0].substring(0, 50) + '...' : 'null');
-        console.log('item.image[1]:', item.image[1] ? item.image[1].substring(0, 50) + '...' : 'null');
-      }
+    // Delete old image from GCS if it exists and is a GCS URL
+    if (item.image && item.image.includes('storage.googleapis.com')) {
+      await deleteImage(item.image);
     }
 
-    let updateData;
-    // Check if this is first time (image[1] doesn't exist or is empty)
-    // Also check if image is not an array (old data format)
-    const isFirstTime = !item.image || !Array.isArray(item.image) || item.image.length < 2 || !item.image[1];
-
-    console.log('Is first time?', isFirstTime);
-
-    if (isFirstTime) {
-      // First time: set both image[0] and image[1]
-      updateData = { image: [base64Image, base64Image] };
-      console.log('Setting both image[0] and image[1] to new image');
-    } else {
-      // Subsequent times: only update image[0], keep image[1]
-      updateData = { image: [base64Image, item.image[1]] };
-      console.log('Updating only image[0], keeping image[1]');
-    }
-
-    console.log('Update data structure:', { image: Array.isArray(updateData.image) ? '[Array]' : typeof updateData.image });
-    console.log('=== END DEBUG ===');
-
+    // Update the item with the GCS image URL
     const updated = await Model.findByIdAndUpdate(
       id,
-      updateData,
+      { image: imageUrl },
       { new: true }
     );
 
     res.json({
       success: true,
-      message: 'Image generated successfully',
+      message: 'Image generated and uploaded successfully',
       data: updated
     });
 
@@ -472,17 +498,29 @@ router.post('/crawl-content/:collection/:id', checkDbConnection, async (req, res
       });
     }
 
-    // Update detail_content in database
+    // Update source_of_detail and detail_content in database
+    console.log(`🔍 Before update - source_of_detail: ${item.source_of_detail}`);
+    console.log(`🔍 Setting source_of_detail to: ${item.source_url}`);
+
+    item.source_of_detail = item.source_url; // Set source_of_detail to source_url for auto-crawl
     item.detail_content = crawledContent;
+
+    // Mark fields as modified to ensure Mongoose saves them
+    item.markModified('source_of_detail');
+    item.markModified('detail_content');
+
     await item.save();
 
     console.log('✅ Content crawled and saved successfully');
+    console.log(`📝 After save - source_of_detail: ${item.source_of_detail}`);
+    console.log(`📝 After save - detail_content length: ${item.detail_content?.length || 0}`);
 
     res.json({
       success: true,
       message: 'Content crawled successfully',
       data: {
         id: item._id,
+        source_of_detail: item.source_url,
         contentLength: crawledContent.length,
         category: category
       }
@@ -490,6 +528,163 @@ router.post('/crawl-content/:collection/:id', checkDbConnection, async (req, res
 
   } catch (error) {
     console.error('❌ Error in crawl-content endpoint:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Custom crawl with user-provided URL
+router.post('/crawl-custom/:collection/:id', checkDbConnection, async (req, res) => {
+  try {
+    const { collection, id } = req.params;
+    const { customUrl } = req.body;
+
+    // Validate customUrl
+    if (!customUrl || typeof customUrl !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'customUrl is required and must be a string'
+      });
+    }
+
+    // Validate URL format
+    try {
+      const urlObj = new URL(customUrl);
+      if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+        return res.status(400).json({
+          success: false,
+          message: 'URL must start with http:// or https://'
+        });
+      }
+    } catch (urlError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid URL format'
+      });
+    }
+
+    // Determine which model to use
+    let Model;
+    switch (collection) {
+      case 'new-products':
+        Model = NewProductService;
+        break;
+      case 'market-trends':
+        Model = BankingMarketTrend;
+        break;
+      case 'fintech-news':
+        Model = FintechNews;
+        break;
+      default:
+        return res.status(400).json({ success: false, message: 'Invalid collection' });
+    }
+
+    // Find the item
+    const item = await Model.findById(id);
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Item not found' });
+    }
+
+    console.log(`\n🔄 Custom crawl for ${collection}/${id}`);
+    console.log(`📍 Custom URL: ${customUrl}`);
+
+    // Determine category by analyzing URL
+    const { detectUrlCategory } = require('../services/crawlerService');
+    const category = await detectUrlCategory(customUrl);
+
+    console.log(`🏷️  Detected Category: ${category}`);
+
+    // Crawl content based on detected category
+    let crawledContent = '';
+
+    try {
+      crawledContent = await crawlContent(customUrl, category);
+    } catch (crawlError) {
+      console.error('❌ Crawl error:', crawlError.message);
+      return res.status(500).json({
+        success: false,
+        message: `Crawl failed: ${crawlError.message}`,
+        category: category
+      });
+    }
+
+    // Update source_of_detail and detail_content in database
+    item.source_of_detail = customUrl;
+    item.detail_content = crawledContent;
+    await item.save();
+
+    console.log('✅ Custom crawl completed and saved successfully');
+    console.log(`📝 Saved to source_of_detail: ${customUrl}`);
+
+    res.json({
+      success: true,
+      message: 'Content crawled successfully from custom URL',
+      data: {
+        id: item._id,
+        source_of_detail: customUrl,
+        contentLength: crawledContent.length,
+        category: category
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error in crawl-custom endpoint:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Temporary crawl - does NOT save to database, only returns result
+// Used for special groups like "Tỷ giá" and "Giá vàng" in Page 3
+router.post('/crawl-temporary', async (req, res) => {
+  try {
+    const { url, title } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        message: 'URL is required'
+      });
+    }
+
+    console.log(`\n🔄 Temporary crawl for: ${title || 'Unnamed'}`);
+    console.log(`📍 URL: ${url}`);
+
+    // Auto-detect category
+    const { detectUrlCategory } = require('../services/crawlerService');
+    const category = await detectUrlCategory(url);
+
+    console.log(`📋 Detected category: ${category}`);
+
+    // Crawl content
+    let crawledContent = '';
+    try {
+      crawledContent = await crawlContent(url, category);
+    } catch (crawlError) {
+      console.error('❌ Crawl error:', crawlError.message);
+      return res.status(500).json({
+        success: false,
+        message: `Crawl failed: ${crawlError.message}`,
+        error: crawlError.message
+      });
+    }
+
+    console.log('✅ Temporary crawl completed (not saved to database)');
+
+    // Return crawled data without saving to database
+    res.json({
+      success: true,
+      message: 'Content crawled successfully (temporary)',
+      data: {
+        title: title || 'Unnamed',
+        url: url,
+        content: crawledContent,
+        source: url,
+        category: category,
+        crawledAt: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error in crawl-temporary endpoint:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });

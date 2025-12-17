@@ -2869,7 +2869,7 @@ button.nav-link.active {
 }
 
 .nav-content {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
   display: flex;
   justify-content: center;
@@ -2927,7 +2927,7 @@ button.nav-link.active {
 
 /* Main Report Content */
 .report-main {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 3rem 2rem;
 }

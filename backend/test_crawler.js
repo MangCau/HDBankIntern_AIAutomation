@@ -527,18 +527,19 @@ async function testMultipleUrls(urls) {
     // Danh sách URL test
     const testUrls = [
       // Ví dụ 1: CafeF
-      "https://cafef.vn/uob-viet-nam-nang-tam-trai-nghiem-ngan-hang-ban-le-voi-bo-the-tin-dung-cai-tien-moi-va-hang-loat-uu-dai-doc-quyen-khap-asean-188251022191508196.chn",
+      //"https://cafef.vn/uob-viet-nam-nang-tam-trai-nghiem-ngan-hang-ban-le-voi-bo-the-tin-dung-cai-tien-moi-va-hang-loat-uu-dai-doc-quyen-khap-asean-188251022191508196.chn",
 
       // Ví dụ 2: Người Quan Sát (thường có Cloudflare)
       //"https://nguoiquansat.vn/ty-phu-pham-nhat-vuong-rot-80-000-ty-vao-du-an-thep-dau-tay-so-ke-truc-dien-voi-dung-quat-2-cua-hoa-phat-259740.html",
 
       // Thêm URL khác ở đây nếu muốn test
       "https://baochinhphu.vn/trien-khai-thanh-toan-qr-xuyen-bien-gioi-viet-nam-trung-quoc-102251202142234548.htm",
+      //"https://storage.googleapis.com/cake-prd-website/homepage/02_The_le_chuong_trinh_GTBB_TD_11_2025_16616b35e3/02_The_le_chuong_trinh_GTBB_TD_11_2025_16616b35e3.pdf",
     ];
 
     // CÁCH 1: Crawl một URL đơn
     console.log('\n🎯 TEST CRAWL ĐƠN URL\n');
-    await crawlWebsite(testUrls[1], {  // Test với nguoiquansat (index 1)
+    await crawlWebsite(testUrls[0], {  // Test với URL đầu tiên (index 0)
       headless: false,       // false = hiện browser để xem quá trình
       timeout: 60000,        // 60 giây timeout
       saveToFile: true,      // Lưu vào file
