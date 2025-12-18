@@ -488,8 +488,8 @@ function Adjust() {
                       <h4>Thông tin chi tiết</h4>
 
                       {/* Product specific fields */}
-                      {'product_segment' in item && (
-                        <p><strong>Phân khúc sản phẩm:</strong> {item.product_segment}</p>
+                      {'product_segment' in item && item.product_segment && (
+                        <p><strong>Phân khúc sản phẩm:</strong> {Array.isArray(item.product_segment) ? item.product_segment.join(' - ') : item.product_segment}</p>
                       )}
 
                       {/* Banking News specific fields */}

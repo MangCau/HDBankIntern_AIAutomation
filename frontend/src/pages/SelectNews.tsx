@@ -1,5 +1,5 @@
 import '../App.css'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiEndpoint } from '../config/api'
 import { useNotification } from '../contexts/NotificationContext'
@@ -1713,7 +1713,23 @@ function SelectNews() {
     // State for sorted categories
     const [sortedCategories, setSortedCategories] = useState<string[]>([])
 
-    // Sort categories using Gemini API
+    // Cache for AI-sorted categories (key: JSON string of categories, value: sorted array)
+    const sortCacheRef = useRef<Map<string, string[]>>(new Map())
+
+    // Previous categories to detect changes
+    const prevCategoriesRef = useRef<string>('')
+
+    // Clear cache on component mount (page reload) để sort lại categories
+    useEffect(() => {
+        // Cleanup: Clear cache khi component unmount
+        return () => {
+            sortCacheRef.current.clear()
+            prevCategoriesRef.current = ''
+            console.log('🗑️ Cleared category sort cache on unmount')
+        }
+    }, [])
+
+    // Sort categories using Gemini API (with caching)
     useEffect(() => {
         const sortCategories = async () => {
             if (availableCategories.length === 0) {
@@ -1727,14 +1743,34 @@ function SelectNews() {
                 return
             }
 
+            // Create cache key from sorted category list (for consistent comparison)
+            const cacheKey = JSON.stringify([...availableCategories].sort())
+
+            // Check if categories actually changed
+            if (prevCategoriesRef.current === cacheKey) {
+                // No change, keep current sorted categories
+                return
+            }
+
+            // Check cache first
+            if (sortCacheRef.current.has(cacheKey)) {
+                console.log('📦 Using cached sorted categories')
+                const cachedResult = sortCacheRef.current.get(cacheKey)!
+                setSortedCategories(cachedResult)
+                prevCategoriesRef.current = cacheKey
+                return
+            }
+
             try {
                 const apiKey = import.meta.env.VITE_GEMINI_API_KEY
                 if (!apiKey) {
                     console.warn('VITE_GEMINI_API_KEY not found, using original order')
                     setSortedCategories(availableCategories)
+                    prevCategoriesRef.current = cacheKey
                     return
                 }
 
+                console.log('🤖 Sorting categories with AI Gemini...')
                 const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`
 
                 const prompt = `Role: Bạn là một Chuyên gia Phân tích Chiến lược Ngân hàng & Fintech.
@@ -1776,7 +1812,12 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                     const jsonMatch = text.match(/\[[\s\S]*\]/)
                     if (jsonMatch) {
                         const sorted = JSON.parse(jsonMatch[0])
-                        setSortedCategories(sorted.filter((cat: string) => cat && availableCategories.includes(cat)))
+                        const filteredSorted = sorted.filter((cat: string) => cat && availableCategories.includes(cat))
+
+                        // Save to cache
+                        sortCacheRef.current.set(cacheKey, filteredSorted)
+                        setSortedCategories(filteredSorted)
+                        console.log('✅ Categories sorted and cached successfully')
                     } else {
                         // Fallback to original order if parsing fails
                         setSortedCategories(availableCategories)
@@ -1784,10 +1825,13 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                 } else {
                     setSortedCategories(availableCategories)
                 }
+
+                prevCategoriesRef.current = cacheKey
             } catch (error) {
                 console.error('Error sorting categories:', error)
                 // Fallback to original order on error
                 setSortedCategories(availableCategories)
+                prevCategoriesRef.current = cacheKey
             }
         }
 
@@ -2077,17 +2121,10 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
     // Xử lý chọn tin tức
     const handleToggleSelectionMode = () => {
         if (isSelectionMode) {
-            // Check for unsaved changes before exiting selection mode
-            if (hasUnsavedChanges()) {
-                const shouldDiscard = window.confirm(
-                    'Bạn có thay đổi chưa lưu. Bạn có chắc chắn muốn hủy và bỏ qua các thay đổi này không?'
-                )
-                if (!shouldDiscard) {
-                    return // Don't exit selection mode
-                }
-            }
-            // Reset tempPriorities về confirmedPriorities
+            // Khi bấm "Hủy chọn", luôn reset về trạng thái ban đầu mà không cần confirm
+            // Reset tempPriorities về confirmedPriorities (hoàn tác tất cả thay đổi)
             setTempPriorities({ ...confirmedPriorities })
+            console.log('✅ Đã hoàn tác tất cả thay đổi chưa lưu')
         }
         setIsSelectionMode(!isSelectionMode)
     }
@@ -2101,6 +2138,11 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
 
     const handleTopicClassificationChange = async (id: string, classification: string) => {
         try {
+            // Kiểm tra xem tin tức này đã được chọn chưa
+            const currentItem = newsData.find(item => item._id === id)
+            const needsSelection = currentItem && !currentItem.selected
+
+            // Update topic_classification
             const response = await fetch(`${API_URL}/header-processing/${id}`, {
                 method: 'PATCH',
                 headers: {
@@ -2112,10 +2154,52 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
             const result = await response.json()
 
             if (result.success) {
-                // Update local newsData state
-                setNewsData(prev => prev.map(item =>
-                    item._id === id ? { ...item, topic_classification: classification } : item
-                ))
+                // Nếu tin chưa được chọn, tự động chọn luôn
+                if (needsSelection) {
+                    const selectResponse = await fetch(`${API_URL}/header-processing/${id}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ selected: true })
+                    })
+
+                    const selectResult = await selectResponse.json()
+
+                    if (selectResult.success) {
+                        // Update local state với cả topic_classification và selected
+                        setNewsData(prev => prev.map(item =>
+                            item._id === id ? { ...item, topic_classification: classification, selected: true } : item
+                        ))
+
+                        // Update confirmedPriorities để UI hiển thị badge ngay lập tức
+                        setConfirmedPriorities(prev => ({
+                            ...prev,
+                            [id]: true
+                        }))
+
+                        // Nếu đang ở selection mode, cũng update tempPriorities
+                        if (isSelectionMode) {
+                            setTempPriorities(prev => ({
+                                ...prev,
+                                [id]: true
+                            }))
+                        }
+
+                        console.log('✅ Đã chọn phân loại và tự động chọn tin tức')
+                    } else {
+                        // Chỉ update topic_classification nếu không set được selected
+                        setNewsData(prev => prev.map(item =>
+                            item._id === id ? { ...item, topic_classification: classification } : item
+                        ))
+                    }
+                } else {
+                    // Tin đã được chọn rồi, chỉ update topic_classification
+                    setNewsData(prev => prev.map(item =>
+                        item._id === id ? { ...item, topic_classification: classification } : item
+                    ))
+                    console.log('✅ Đã cập nhật phân loại (tin đã được chọn từ trước)')
+                }
             } else {
                 alert('Lỗi khi cập nhật phân loại: ' + result.message)
             }
@@ -2787,7 +2871,7 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                                 }}
                             >
                                 <span className='stat-label' style={{ fontSize: '13px', color: isPriorityView ? '#ffffff' : '#F00020' }}>
-                                    Tin ưu tiên
+                                    Tin đã chọn
                                 </span>
                                 {/* get total number priority news */}
                                 {/* <span className='stat-value' style={{ color: isPriorityView ? '#ffffff' : '#F00020' }}>{getPriorityCount()}</span> */}

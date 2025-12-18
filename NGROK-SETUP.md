@@ -1,4 +1,75 @@
-# Hướng dẫn sử dụng ngrok cho n8n callback
+# Hướng dẫn cài đặt và sử dụng ngrok cho n8n callback
+
+## Bước 0: Download và cài đặt ngrok
+
+### Cách 1: Download từ trang chủ ngrok (Khuyến nghị)
+
+1. **Truy cập**: https://ngrok.com/download
+2. **Chọn hệ điều hành**:
+   - Windows: Download file ZIP
+   - macOS: Download file ZIP hoặc dùng Homebrew
+   - Linux: Download file TAR
+3. **Giải nén** file vừa download:
+   - Windows: Click phải → Extract All
+   - macOS/Linux: `unzip ngrok-v3-stable-windows-amd64.zip` (hoặc `tar -xvzf` cho Linux)
+4. **Di chuyển** file `ngrok.exe` (Windows) hoặc `ngrok` (macOS/Linux) vào thư mục `ngrok/` trong project:
+   ```bash
+   # Windows
+   mkdir ngrok
+   move ngrok.exe ngrok\
+
+   # macOS/Linux
+   mkdir -p ngrok
+   mv ngrok ngrok/
+   ```
+
+### Cách 2: Sử dụng Package Manager
+
+**Windows (Chocolatey):**
+```bash
+choco install ngrok
+# Sau đó copy ngrok.exe vào thư mục ngrok/
+```
+
+**macOS (Homebrew):**
+```bash
+brew install ngrok/ngrok/ngrok
+# Sau đó copy binary vào thư mục ngrok/
+```
+
+**Linux (Snap):**
+```bash
+snap install ngrok
+# Sau đó copy binary vào thư mục ngrok/
+```
+
+### Đăng ký tài khoản ngrok (Miễn phí)
+
+1. Truy cập: https://dashboard.ngrok.com/signup
+2. Đăng ký tài khoản (có thể dùng Google/GitHub)
+3. Lấy authtoken từ: https://dashboard.ngrok.com/get-started/your-authtoken
+4. Xác thực ngrok:
+   ```bash
+   # Windows
+   .\ngrok\ngrok.exe config add-authtoken YOUR_AUTHTOKEN
+
+   # macOS/Linux
+   ./ngrok/ngrok config add-authtoken YOUR_AUTHTOKEN
+   ```
+
+### Verify cài đặt
+
+```bash
+# Windows
+.\ngrok\ngrok.exe --version
+
+# macOS/Linux
+./ngrok/ngrok --version
+```
+
+Bạn sẽ thấy: `ngrok version 3.x.x`
+
+---
 
 ## Bước 1: Start Backend Server
 

@@ -15,5 +15,5 @@ hãy gọi lên webhook n8n
 
 
 ----lỗi mất ảnh khi reloadpage/trang này về trang này
-
+---chỉnh code (bảng comparation, với bank là array)
 
