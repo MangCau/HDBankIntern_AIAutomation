@@ -71,6 +71,7 @@ interface NewProductData {
     source_type?: string
     source_url?: string
     pdf_file_name?: string
+    id_processed?: string
 }
 
 interface BankingTrendData {
@@ -89,6 +90,7 @@ interface BankingTrendData {
     source_url?: string
     published_date: string
     pdf_file_name?: string
+    id_processed?: string
 }
 
 interface FintechNewsData {
@@ -108,6 +110,7 @@ interface FintechNewsData {
     source_url?: string
     published_date: string
     pdf_file_name?: string
+    id_processed?: string
 }
 
 // Summary Content Component with real data from API
@@ -143,6 +146,18 @@ function SummaryContent({
 
     // Track pending selection changes (not yet saved to database)
     const [pendingSelectionChanges, setPendingSelectionChanges] = useState<Map<string, { collection: string, selected: boolean }>>(new Map())
+
+    // Reprocess popup state
+    const [showReprocessPopup, setShowReprocessPopup] = useState(false)
+    const [reprocessData, setReprocessData] = useState<{
+        collection: string
+        itemId: string
+        idProcessed: string
+        headerProcessingId: string
+        currentTopicClassification: string | null
+    } | null>(null)
+    const [selectedTopicClassification, setSelectedTopicClassification] = useState<string>('')
+    const [isReprocessing, setIsReprocessing] = useState(false)
 
     // AI sorting function for new products
     const sortProductsWithAI = async (products: NewProductData[]): Promise<NewProductData[]> => {
@@ -523,6 +538,165 @@ ${JSON.stringify(productsForSorting, null, 2)}`
             console.error('Error toggling reportSelected:', error)
             alert('Có lỗi xảy ra!')
         }
+    }
+
+    // Send item to n8n for reprocessing with new flow
+    const handleReprocess = async (categoryTitle: string, itemId: string, item: any) => {
+        let collection = ''
+        if (categoryTitle === 'Sản phẩm & Dịch vụ mới') collection = 'new-products'
+        else if (categoryTitle === 'Tin tức ngành Ngân hàng') collection = 'market-trends'
+        else if (categoryTitle === 'Tin tức ngành Fintech') collection = 'fintech-news'
+
+        try {
+            // Step 1: Get id_processed from the item
+            const idProcessed = item.id_processed
+
+            if (!idProcessed) {
+                alert('Tin tức này chưa có id_processed!')
+                return
+            }
+
+            // Step 2: Get HeaderProcessing document using id_processed
+            const headerResponse = await fetch(apiEndpoint('api/n8n/get-header-processing'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id_processed: idProcessed })
+            })
+
+            const headerData = await headerResponse.json()
+
+            if (!headerData.success || !headerData.data) {
+                alert('Không tìm thấy thông tin HeaderProcessing!')
+                return
+            }
+
+            const headerDoc = headerData.data
+
+            // Debug: Log the topic_classification value
+            console.log('📋 HeaderProcessing data:', {
+                _id: headerDoc._id,
+                topic_classification: headerDoc.topic_classification,
+                collection,
+                itemId
+            })
+
+            // Step 3: Show popup with topic_classification options
+            setReprocessData({
+                collection,
+                itemId,
+                idProcessed,
+                headerProcessingId: headerDoc._id,
+                currentTopicClassification: headerDoc.topic_classification || null
+            })
+            setSelectedTopicClassification(headerDoc.topic_classification || '')
+            setShowReprocessPopup(true)
+
+        } catch (error) {
+            console.error('Error in handleReprocess:', error)
+            alert('Có lỗi xảy ra khi xử lý!')
+        }
+    }
+
+    // Handle confirmation of reprocessing in popup
+    const handleConfirmReprocess = async () => {
+        if (!reprocessData || !selectedTopicClassification) {
+            alert('Vui lòng chọn phân loại!')
+            return
+        }
+
+        setIsReprocessing(true)
+
+        try {
+            // Step 1: Update topic_classification in HeaderProcessing
+            const updateResponse = await fetch(apiEndpoint('api/n8n/update-topic-classification'), {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    id_processed: reprocessData.idProcessed,
+                    topic_classification: selectedTopicClassification
+                })
+            })
+
+            const updateResult = await updateResponse.json()
+
+            if (!updateResult.success) {
+                alert('Không thể cập nhật phân loại!')
+                setIsReprocessing(false)
+                return
+            }
+
+            // Step 2: Send to n8n and get jobId (using job-based pattern)
+            const reprocessResponse = await fetch(apiEndpoint('api/n8n/reprocess-with-callback'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    id_processed: reprocessData.idProcessed,
+                    collection: reprocessData.collection,
+                    itemId: reprocessData.itemId
+                })
+            })
+
+            const reprocessResult = await reprocessResponse.json()
+
+            if (reprocessResult.jobId) {
+                alert('Đã gửi yêu cầu tóm tắt lại! Trang sẽ được tải lại khi n8n hoàn thành.')
+                // Close popup
+                setShowReprocessPopup(false)
+                setReprocessData(null)
+                setSelectedTopicClassification('')
+
+                // Start polling for job completion
+                startPollingForReprocess(reprocessResult.jobId)
+            } else {
+                alert(reprocessResult.message || 'Không thể gửi yêu cầu. Vui lòng thử lại.')
+                setIsReprocessing(false)
+            }
+
+        } catch (error) {
+            console.error('Error confirming reprocess:', error)
+            alert('Có lỗi xảy ra!')
+            setIsReprocessing(false)
+        }
+    }
+
+    // Poll for reprocess job status
+    const startPollingForReprocess = (jobId: string) => {
+        const pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch(apiEndpoint(`api/n8n/job/${jobId}`))
+                const job = await response.json()
+
+                if (job.status === 'completed') {
+                    clearInterval(pollInterval)
+                    setIsReprocessing(false)
+                    // Reload page to show updated data
+                    window.location.reload()
+                } else if (job.status === 'failed') {
+                    clearInterval(pollInterval)
+                    setIsReprocessing(false)
+                    alert('Tóm tắt lại thất bại! Vui lòng thử lại.')
+                }
+            } catch (error) {
+                console.error('Error polling reprocess job:', error)
+            }
+        }, 3000) // Poll every 3 seconds
+    }
+
+    // Handle closing popup
+    const handleCloseReprocessPopup = () => {
+        if (isReprocessing) {
+            alert('Đang xử lý, vui lòng đợi!')
+            return
+        }
+        setShowReprocessPopup(false)
+        setReprocessData(null)
+        setSelectedTopicClassification('')
     }
 
     // // Save all pending selection changes to database
@@ -1148,6 +1322,35 @@ ${JSON.stringify(productsForSorting, null, 2)}`
                                                         </svg>
                                                         Sửa
                                                     </button>
+                                                    <button
+                                                        onClick={() => handleReprocess(categoryTitle, item._id, item)}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            backgroundColor: '#17a2b8',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            fontSize: '12px',
+                                                            fontWeight: '600',
+                                                            transition: 'all 0.2s ease'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#138496'
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#17a2b8'
+                                                        }}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <polyline points="23 4 23 10 17 10"></polyline>
+                                                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                                        </svg>
+                                                        Tóm tắt lại
+                                                    </button>
                                                 </div>
                                                 <p className="news-summary">{item.summary || item.description || 'Chưa có tóm tắt'}</p>
                                             </>
@@ -1408,6 +1611,269 @@ ${JSON.stringify(productsForSorting, null, 2)}`
                     })()}
                 </div>
             ))}
+
+            {/* Reprocess Popup Modal */}
+            {showReprocessPopup && reprocessData && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 9999
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: '12px',
+                        padding: '32px',
+                        maxWidth: '500px',
+                        width: '90%',
+                        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)'
+                    }}>
+                        <h3 style={{
+                            fontSize: '20px',
+                            fontWeight: '600',
+                            color: '#2c3e50',
+                            marginBottom: '24px',
+                            textAlign: 'center'
+                        }}>
+                            Hãy xác nhận lại phân loại
+                        </h3>
+
+                        <div style={{ marginBottom: '24px' }}>
+                            <p style={{
+                                fontSize: '14px',
+                                color: '#6c757d',
+                                marginBottom: '8px'
+                            }}>
+                                Chọn phân loại cho tin tức này:
+                            </p>
+
+                            {reprocessData?.currentTopicClassification && (
+                                <p style={{
+                                    fontSize: '13px',
+                                    color: '#F00020',
+                                    marginBottom: '16px',
+                                    fontWeight: '600',
+                                    backgroundColor: '#fff5f5',
+                                    padding: '8px 12px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #ffe0e0'
+                                }}>
+                                    Hiện tại: {reprocessData.currentTopicClassification}
+                                </p>
+                            )}
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {/* Radio option 1: SPDV_NGAN_HANG_FINTECH */}
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    padding: '12px 16px',
+                                    border: `2px solid ${selectedTopicClassification === 'SPDV_NGAN_HANG_FINTECH' ? '#F00020' : '#dee2e6'}`,
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    backgroundColor: selectedTopicClassification === 'SPDV_NGAN_HANG_FINTECH' ? '#fff5f5' : '#ffffff',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (selectedTopicClassification !== 'SPDV_NGAN_HANG_FINTECH') {
+                                        e.currentTarget.style.backgroundColor = '#f8f9fa'
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (selectedTopicClassification !== 'SPDV_NGAN_HANG_FINTECH') {
+                                        e.currentTarget.style.backgroundColor = '#ffffff'
+                                    }
+                                }}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="topic_classification"
+                                        value="SPDV_NGAN_HANG_FINTECH"
+                                        checked={selectedTopicClassification === 'SPDV_NGAN_HANG_FINTECH'}
+                                        onChange={(e) => setSelectedTopicClassification(e.target.value)}
+                                        style={{
+                                            marginRight: '12px',
+                                            width: '18px',
+                                            height: '18px',
+                                            cursor: 'pointer'
+                                        }}
+                                    />
+                                    <span style={{
+                                        fontSize: '14px',
+                                        fontWeight: selectedTopicClassification === 'SPDV_NGAN_HANG_FINTECH' ? '600' : '500',
+                                        color: selectedTopicClassification === 'SPDV_NGAN_HANG_FINTECH' ? '#F00020' : '#495057'
+                                    }}>
+                                        Sản phẩm & dịch vụ
+                                    </span>
+                                </label>
+
+                                {/* Radio option 2: THI_TRUONG_NGAN_HANG */}
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    padding: '12px 16px',
+                                    border: `2px solid ${selectedTopicClassification === 'THI_TRUONG_NGAN_HANG' ? '#F00020' : '#dee2e6'}`,
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    backgroundColor: selectedTopicClassification === 'THI_TRUONG_NGAN_HANG' ? '#fff5f5' : '#ffffff',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (selectedTopicClassification !== 'THI_TRUONG_NGAN_HANG') {
+                                        e.currentTarget.style.backgroundColor = '#f8f9fa'
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (selectedTopicClassification !== 'THI_TRUONG_NGAN_HANG') {
+                                        e.currentTarget.style.backgroundColor = '#ffffff'
+                                    }
+                                }}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="topic_classification"
+                                        value="THI_TRUONG_NGAN_HANG"
+                                        checked={selectedTopicClassification === 'THI_TRUONG_NGAN_HANG'}
+                                        onChange={(e) => setSelectedTopicClassification(e.target.value)}
+                                        style={{
+                                            marginRight: '12px',
+                                            width: '18px',
+                                            height: '18px',
+                                            cursor: 'pointer'
+                                        }}
+                                    />
+                                    <span style={{
+                                        fontSize: '14px',
+                                        fontWeight: selectedTopicClassification === 'THI_TRUONG_NGAN_HANG' ? '600' : '500',
+                                        color: selectedTopicClassification === 'THI_TRUONG_NGAN_HANG' ? '#F00020' : '#495057'
+                                    }}>
+                                        Thị trường Ngân hàng
+                                    </span>
+                                </label>
+
+                                {/* Radio option 3: THI_TRUONG_FINTECH */}
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    padding: '12px 16px',
+                                    border: `2px solid ${selectedTopicClassification === 'THI_TRUONG_FINTECH' ? '#F00020' : '#dee2e6'}`,
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    backgroundColor: selectedTopicClassification === 'THI_TRUONG_FINTECH' ? '#fff5f5' : '#ffffff',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (selectedTopicClassification !== 'THI_TRUONG_FINTECH') {
+                                        e.currentTarget.style.backgroundColor = '#f8f9fa'
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (selectedTopicClassification !== 'THI_TRUONG_FINTECH') {
+                                        e.currentTarget.style.backgroundColor = '#ffffff'
+                                    }
+                                }}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="topic_classification"
+                                        value="THI_TRUONG_FINTECH"
+                                        checked={selectedTopicClassification === 'THI_TRUONG_FINTECH'}
+                                        onChange={(e) => setSelectedTopicClassification(e.target.value)}
+                                        style={{
+                                            marginRight: '12px',
+                                            width: '18px',
+                                            height: '18px',
+                                            cursor: 'pointer'
+                                        }}
+                                    />
+                                    <span style={{
+                                        fontSize: '14px',
+                                        fontWeight: selectedTopicClassification === 'THI_TRUONG_FINTECH' ? '600' : '500',
+                                        color: selectedTopicClassification === 'THI_TRUONG_FINTECH' ? '#F00020' : '#495057'
+                                    }}>
+                                        Thị trường Fintech
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={handleCloseReprocessPopup}
+                                disabled={isReprocessing}
+                                style={{
+                                    padding: '10px 20px',
+                                    backgroundColor: '#6c757d',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    cursor: isReprocessing ? 'not-allowed' : 'pointer',
+                                    opacity: isReprocessing ? 0.6 : 1,
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isReprocessing) {
+                                        e.currentTarget.style.backgroundColor = '#5a6268'
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!isReprocessing) {
+                                        e.currentTarget.style.backgroundColor = '#6c757d'
+                                    }
+                                }}
+                            >
+                                Hủy
+                            </button>
+
+                            <button
+                                onClick={handleConfirmReprocess}
+                                disabled={isReprocessing || !selectedTopicClassification}
+                                style={{
+                                    padding: '10px 20px',
+                                    backgroundColor: '#F00020',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    cursor: (isReprocessing || !selectedTopicClassification) ? 'not-allowed' : 'pointer',
+                                    opacity: (isReprocessing || !selectedTopicClassification) ? 0.6 : 1,
+                                    transition: 'all 0.2s ease',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isReprocessing && selectedTopicClassification) {
+                                        e.currentTarget.style.backgroundColor = '#c00018'
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!isReprocessing && selectedTopicClassification) {
+                                        e.currentTarget.style.backgroundColor = '#F00020'
+                                    }
+                                }}
+                            >
+                                {isReprocessing && (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                    </svg>
+                                )}
+                                {isReprocessing ? 'Đang xử lý...' : 'Xác nhận'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     )

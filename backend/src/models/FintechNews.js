@@ -22,6 +22,7 @@ const fintechNewsSchema = new mongoose.Schema({
   published_date: mongoose.Schema.Types.Mixed, // Support both String and Date
   // extracted_from_pdf: Boolean,
   pdf_file_name: String,
+  id_processed: String, // ID for n8n reprocessing
   // timestamp: Date
 }, {
   collection: 'fintech_news',

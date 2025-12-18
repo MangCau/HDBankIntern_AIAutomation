@@ -19,6 +19,7 @@ const newProductServiceSchema = new mongoose.Schema({
   source_type: String,
   source_url: String,
   pdf_file_name: String,
+  id_processed: String, // ID for n8n reprocessing
   // timestamp: Date
 }, {
   collection: 'new_product_service',

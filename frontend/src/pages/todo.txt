@@ -14,6 +14,5 @@ hãy gọi lên webhook n8n
 ---(THANH) chỉnh lại prompt tóm tắt tin tức banking và fintech
 
 
-----lỗi mất ảnh khi reloadpage/trang này về trang này
 ---chỉnh code (bảng comparation, với bank là array)
-
+---mỗi khi bấm crawl, nó sẽ bị reload trang
