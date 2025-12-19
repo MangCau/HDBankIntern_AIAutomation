@@ -991,7 +991,7 @@ function SummaryPages({
                                                         opacity: crawlingIds.has(product._id) ? 0.6 : 1
                                                     }}
                                                 >
-                                                    {crawlingIds.has(product._id) ? '⏳ Đang crawl...' : 'Lấy nội dung cũ'}
+                                                    {crawlingIds.has(product._id) ? '⏳ Đang crawl...' : 'Lấy nội dung gốc'}
                                                 </button>
                                             </div>
                                         </div>
@@ -1287,7 +1287,7 @@ function SummaryPages({
                                                         opacity: crawlingIds.has(trend._id) ? 0.6 : 1
                                                     }}
                                                 >
-                                                    {crawlingIds.has(trend._id) ? '⏳ Đang crawl...' : 'Lấy nội dung cũ'}
+                                                    {crawlingIds.has(trend._id) ? '⏳ Đang crawl...' : 'Lấy nội dung gốc'}
                                                 </button>
                                             </div>
                                         </div>
@@ -1915,7 +1915,7 @@ function SummaryPages({
                                                         opacity: crawlingIds.has(news._id) ? 0.6 : 1
                                                     }}
                                                 >
-                                                    {crawlingIds.has(news._id) ? '⏳ Đang crawl...' : 'Lấy nội dung cũ'}
+                                                    {crawlingIds.has(news._id) ? '⏳ Đang crawl...' : 'Lấy nội dung gốc'}
                                                 </button>
                                             </div>
                                         </div>

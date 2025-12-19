@@ -437,15 +437,22 @@ async function summarizeWithGemini(content) {
         }
 
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
 
         const prompt = `Bạn là chuyên gia thuyết trình và báo cáo sản phẩm, tin tức ngành ngân hàng và fintech nói chung.
+ 
 Bạn cần tóm tắt toàn bộ nội dung tài liệu, trình bày các ý chính của từng phần theo từng chủ đề hoặc sản phẩm để báo cáo. Không tạo ra thông tin mới mà hoàn toàn vào nội dung input để tóm tắt.
-Đối với mỗi sản phẩm, dịch vụ hoặc chương trình, hãy nêu rõ đặc điểm nổi bật, điều kiện tham gia, giá trị ưu đãi, thời gian áp dụng, đối tượng hưởng lợi, quy trình thực hiện và ý nghĩa đối với khách hàng hoặc ngành. Không tạo ra thông tin mới mà hoàn toàn vào nội dung input. Đối với tin tức thị trường ngân hàng, tin tức fintech, hãy nêu ra đặc điểm nổi bật dựa trên cập nhật, những yếu tố trending từ tin tức mạng.
+ 
+Đối với mỗi sản phẩm, dịch vụ hoặc chương trình, hãy nêu rõ đặc điểm nổi bật, điều kiện tham gia, giá trị ưu đãi, thời gian áp dụng, đối tượng hưởng lợi và ý nghĩa đối với khách hàng hoặc ngành. Không tạo ra thông tin mới mà hoàn toàn vào nội dung input. Đối với tin tức thị trường ngân hàng, tin tức fintech, hãy nêu ra đặc điểm nổi bật dựa trên cập nhật, những yếu tố trending từ tin tức mạng.
+ 
 Trích nguyên văn các đường link nguồn. Loại bỏ các thông tin không liên quan như hashtag, hình ảnh minh họa, hoặc các chi tiết phụ không ảnh hưởng đến nội dung chính.
+ 
 Đảm bảo bản tóm tắt giữ nguyên đầy đủ các thông tin quan trọng, đặc trưng sản phẩm/dịch vụ theo ngành, và trình bày rõ ràng, mạch lạc từng nội dung.
+ 
 Cần cấu trúc thành các đoạn hoặc các gạch đầu dòng để làm rõ các ý, đặc trưng của nội dung. 
-Kết quả trả ra chỉ có nội dung được tóm tắt. Giới hạn 150 cộng trừ 10 chữ, giới hạn này không áp dụng cho đường link\.
+ 
+Kết quả trả ra chỉ có nội dung được tóm tắt. Giới hạn 150 cộng trừ 10 chữ, giới hạn này không áp dụng cho đường link, link trích nguyên văn để có thể truy cập được. Bỏ qua tất cả định dạng, trả về ký tự thuần túy.
+Nếu là * thì sẽ là gạch đầu dòng -.
 
 Nội dung cần tóm tắt:
 ${content}`;

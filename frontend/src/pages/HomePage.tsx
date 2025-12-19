@@ -103,6 +103,7 @@ function HomePage() {
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<Report | null>(null)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false)
 
   const overviewRef = useRef<HTMLElement>(null)
   const productsRef = useRef<HTMLElement>(null)
@@ -626,7 +627,9 @@ function HomePage() {
                   marginBottom: '32px',
                   border: '2px solid #F00020',
                   borderRadius: '8px',
-                  WebkitOverflowScrolling: 'touch'
+                  WebkitOverflowScrolling: 'touch',
+                  maxHeight: '600px',
+                  overflowY: 'auto'
                 }}>
                   <table style={{
                     width: '100%',
@@ -635,7 +638,11 @@ function HomePage() {
                     minWidth: windowWidth < 640 ? '500px' : '600px',
                     fontSize: windowWidth < 640 ? '11px' : windowWidth < 768 ? '12px' : '14px'
                   }}>
-                    <thead>
+                    <thead style={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 10
+                    }}>
                       <tr style={{ backgroundColor: '#F00020' }}>
                         <th style={{
                           padding: windowWidth < 640 ? '8px' : windowWidth < 768 ? '12px' : '16px',
@@ -644,7 +651,8 @@ function HomePage() {
                           fontWeight: '700',
                           fontSize: windowWidth < 640 ? '11px' : windowWidth < 768 ? '12px' : '14px',
                           borderRight: '1px solid rgba(255,255,255,0.2)',
-                          minWidth: windowWidth < 640 ? '140px' : windowWidth < 768 ? '180px' : '250px'
+                          minWidth: windowWidth < 640 ? '140px' : windowWidth < 768 ? '180px' : '250px',
+                          backgroundColor: '#F00020'
                         }}>
                           Sản phẩm / Dịch vụ
                         </th>
@@ -656,7 +664,8 @@ function HomePage() {
                             fontWeight: '700',
                             fontSize: windowWidth < 640 ? '10px' : windowWidth < 768 ? '11px' : '14px',
                             borderRight: '1px solid rgba(255,255,255,0.2)',
-                            minWidth: windowWidth < 640 ? '60px' : windowWidth < 768 ? '75px' : '100px'
+                            minWidth: windowWidth < 640 ? '60px' : windowWidth < 768 ? '75px' : '100px',
+                            backgroundColor: '#F00020'
                           }}>
                             {bank}
                           </th>
@@ -783,25 +792,78 @@ function HomePage() {
               }}>
                 Danh sách tổng hợp
               </h3>
-              <ul style={{
-                listStyle: 'disc inside',
-                padding: windowWidth < 480 ? '16px' : '20px',
-                backgroundColor: '#f8f9fa',
-                borderRadius: '8px',
-                border: '1px solid #dee2e6',
-                lineHeight: '1.8'
+
+              {isSummaryExpanded && (
+                <ul style={{
+                  listStyle: 'disc inside',
+                  padding: windowWidth < 480 ? '16px' : '20px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  border: '1px solid #dee2e6',
+                  lineHeight: '1.8',
+                  position: 'relative',
+                  marginBottom: '16px'
+                }}>
+                  {report.page2.summaryList.map((item, index) => (
+                    <li key={index} style={{
+                      padding: windowWidth < 480 ? '6px 0' : '8px 0',
+                      fontSize: windowWidth < 480 ? '14px' : '16px',
+                      color: '#495057',
+                      wordBreak: 'break-word'
+                    }}>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center'
               }}>
-                {report.page2.summaryList.map((item, index) => (
-                  <li key={index} style={{
-                    padding: windowWidth < 480 ? '6px 0' : '8px 0',
-                    fontSize: windowWidth < 480 ? '14px' : '16px',
-                    color: '#495057',
-                    wordBreak: 'break-word'
-                  }}>
-                    {item}
-                  </li>
-                ))}
-              </ul>
+                <button
+                  onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
+                  style={{
+                    padding: '10px 24px',
+                    backgroundColor: '#F00020',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#c00018'
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#F00020'
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  {isSummaryExpanded ? (
+                    <>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="18 15 12 9 6 15" />
+                      </svg>
+                      <span>Thu gọn</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                      <span>Xem thêm ({report.page2.summaryList.length})</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
 
@@ -993,7 +1055,7 @@ function HomePage() {
                     padding: '20px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '20px'
+                    gap: '8px'
                   }}>
                     {/* Manual Content for Tỷ giá, Giá vàng */}
                     {group.manualContent && (
@@ -1007,34 +1069,16 @@ function HomePage() {
                       </div>
                     )}
 
-                    {/* Separator between manual content and items */}
-                    {group.manualContent && group.items.length > 0 && (
-                      <hr style={{
-                        border: 'none',
-                        borderTop: '1px solid #dee2e6',
-                        margin: '16px 0'
-                      }} />
-                    )}
-
                     {/* Items */}
                     {group.items.length > 0 ? (
-                      group.items.map((item, itemIndex) => (
-                        <div key={item._id}>
-                          {itemIndex > 0 && (
-                            <hr style={{
-                              border: 'none',
-                              borderTop: '1px solid #dee2e6',
-                              margin: '16px 0'
-                            }} />
-                          )}
-                          <div style={{
-                            whiteSpace: 'pre-wrap',
-                            lineHeight: '1.6',
-                            fontSize: '14px',
-                            color: '#495057'
-                          }}>
-                            {item.detail_content || 'Chưa có nội dung chi tiết'}
-                          </div>
+                      group.items.map((item) => (
+                        <div key={item._id} style={{
+                          whiteSpace: 'pre-wrap',
+                          lineHeight: '1.6',
+                          fontSize: '14px',
+                          color: '#495057'
+                        }}>
+                          {item.detail_content || 'Chưa có nội dung chi tiết'}
                         </div>
                       ))
                     ) : (
@@ -1129,26 +1173,17 @@ function HomePage() {
                     padding: '20px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '20px'
+                    gap: '8px'
                   }}>
                     {group.items.length > 0 ? (
-                      group.items.map((item, itemIndex) => (
-                        <div key={item._id}>
-                          {itemIndex > 0 && (
-                            <hr style={{
-                              border: 'none',
-                              borderTop: '1px solid #dee2e6',
-                              margin: '16px 0'
-                            }} />
-                          )}
-                          <div style={{
-                            whiteSpace: 'pre-wrap',
-                            lineHeight: '1.6',
-                            fontSize: '14px',
-                            color: '#495057'
-                          }}>
-                            {item.detail_content || 'Chưa có nội dung chi tiết'}
-                          </div>
+                      group.items.map((item) => (
+                        <div key={item._id} style={{
+                          whiteSpace: 'pre-wrap',
+                          lineHeight: '1.6',
+                          fontSize: '14px',
+                          color: '#495057'
+                        }}>
+                          {item.detail_content || 'Chưa có nội dung chi tiết'}
                         </div>
                       ))
                     ) : (

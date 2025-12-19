@@ -137,6 +137,13 @@ function SummaryContent({
     })
     const itemsPerPage = 5
 
+    // Refs for scrolling to top of each category when page changes
+    const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({
+        'Sản phẩm & Dịch vụ mới': null,
+        'Tin tức ngành Ngân hàng': null,
+        'Tin tức ngành Fintech': null
+    })
+
     // Real data from API
     const [newProducts, setNewProducts] = useState<NewProductData[]>([])
     const [sortedNewProducts, setSortedNewProducts] = useState<NewProductData[]>([])
@@ -325,6 +332,27 @@ ${JSON.stringify(productsForSorting, null, 2)}`
             return hasChanges ? updated : prev
         })
     }, [newProducts.length, sortedNewProducts.length, marketTrends.length, fintechNews.length])
+
+    // Track previous page values to detect actual changes (not initial mount)
+    const prevPageRef = useRef<Record<string, number>>(currentPage)
+
+    // Scroll to top of category when page changes
+    useEffect(() => {
+        // Find which category's page changed by comparing with previous values
+        Object.entries(currentPage).forEach(([categoryTitle, pageNum]) => {
+            const prevPage = prevPageRef.current[categoryTitle]
+            // Only scroll if page actually changed (not initial mount)
+            if (prevPage !== undefined && prevPage !== pageNum) {
+                const ref = categoryRefs.current[categoryTitle]
+                if (ref) {
+                    // Scroll to category title when page changes
+                    ref.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+            }
+        })
+        // Update previous page values
+        prevPageRef.current = currentPage
+    }, [currentPage])
 
     // Helper functions
     const getTitle = (item: any): string => {
@@ -537,6 +565,46 @@ ${JSON.stringify(productsForSorting, null, 2)}`
         } catch (error) {
             console.error('Error toggling reportSelected:', error)
             alert('Có lỗi xảy ra!')
+        }
+    }
+
+    // Remove item from report (set selected=false and reportSelected=false)
+    const handleRemoveFromReport = async (categoryTitle: string, itemId: string) => {
+        if (!window.confirm('Bạn có chắc muốn xóa tin này khỏi báo cáo?')) {
+            return
+        }
+
+        let collection = ''
+        if (categoryTitle === 'Sản phẩm & Dịch vụ mới') collection = 'new-products'
+        else if (categoryTitle === 'Tin tức ngành Ngân hàng') collection = 'market-trends'
+        else if (categoryTitle === 'Tin tức ngành Fintech') collection = 'fintech-news'
+
+        try {
+            // Update both selected and reportSelected to false
+            await Promise.all([
+                fetch(apiEndpoint(`api/data/update-field/${collection}/${itemId}`), {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        field: 'selected',
+                        value: false
+                    })
+                }),
+                fetch(apiEndpoint(`api/data/update-field/${collection}/${itemId}`), {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        field: 'reportSelected',
+                        value: false
+                    })
+                })
+            ])
+
+            // Reload page to reflect changes
+            window.location.reload()
+        } catch (error) {
+            console.error('Error removing from report:', error)
+            alert('Có lỗi xảy ra khi xóa tin!')
         }
     }
 
@@ -904,14 +972,17 @@ ${JSON.stringify(productsForSorting, null, 2)}`
         }}>
             {Object.entries(dataByCategory).map(([categoryTitle, items]) => (
                 <div key={categoryTitle} style={{ marginBottom: '48px' }}>
-                    <h2 style={{
-                        fontSize: '22px',
-                        color: '#2c3e50',
-                        marginBottom: '20px',
-                        paddingBottom: '12px',
-                        borderBottom: '2px solid #F00020',
-                        fontWeight: '600'
-                    }}>
+                    <h2
+                        ref={(el) => { categoryRefs.current[categoryTitle] = el }}
+                        style={{
+                            fontSize: '22px',
+                            color: '#2c3e50',
+                            marginBottom: '20px',
+                            paddingBottom: '12px',
+                            borderBottom: '2px solid #F00020',
+                            fontWeight: '600',
+                            scrollMarginTop: '100px'
+                        }}>
                         {categoryTitle}
                     </h2>
 
@@ -1287,7 +1358,7 @@ ${JSON.stringify(productsForSorting, null, 2)}`
                                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                                     <polyline points="20 6 9 17 4 12" />
                                                                 </svg>
-                                                                <span>Đã chọn</span>
+                                                                <span>Đã chọn báo cáo</span>
                                                             </>
                                                         ) : (
                                                             <>
@@ -1295,9 +1366,40 @@ ${JSON.stringify(productsForSorting, null, 2)}`
                                                                     <line x1="18" y1="6" x2="6" y2="18" />
                                                                     <line x1="6" y1="6" x2="18" y2="18" />
                                                                 </svg>
-                                                                <span>Bỏ chọn</span>
+                                                                <span>Không chọn báo cáo</span>
                                                             </>
                                                         )}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleRemoveFromReport(categoryTitle, item._id)}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            backgroundColor: '#dc3545',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            fontSize: '12px',
+                                                            fontWeight: '600',
+                                                            transition: 'all 0.2s ease'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#c82333'
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#dc3545'
+                                                        }}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <polyline points="3 6 5 6 21 6" />
+                                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                                            <line x1="10" y1="11" x2="10" y2="17" />
+                                                            <line x1="14" y1="11" x2="14" y2="17" />
+                                                        </svg>
+                                                        <span>Xóa tin</span>
                                                     </button>
                                                     <button
                                                         className="edit-btn"
@@ -2015,6 +2117,9 @@ function SelectNews() {
     const [confirmedNewsPage, setConfirmedNewsPage] = useState(1)
     const itemsPerPage = 10 // Number of news items per page
 
+    // Ref for scrolling to top of news list when page changes
+    const newsListTopRef = useRef<HTMLDivElement>(null)
+
     // Pagination state for each topic group in Priority View
     const [topicPages, setTopicPages] = useState<Record<string, number>>({
         'SPDV_NGAN_HANG_FINTECH': 1,
@@ -2541,6 +2646,13 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
             })
         }
     }, [selectedCategory, isPriorityView, startDateISO, endDateISO])
+
+    // Scroll to top of news list when page changes
+    useEffect(() => {
+        if (newsListTopRef.current) {
+            newsListTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+    }, [currentPage])
 
     // Check if there are unsaved changes
     const hasUnsavedChanges = () => {
@@ -3509,6 +3621,116 @@ Output Format: Trả về kết quả duy nhất là một JSON Array chứa cá
                                 </button>
                             )}
                         </div>
+
+                        {/* Scroll anchor for pagination */}
+                        <div ref={newsListTopRef} style={{ scrollMarginTop: '100px' }}></div>
+
+                        {/* Pagination - Top (only show in non-priority view) */}
+                        {!isPriorityView && filteredNews.length > itemsPerPage && (
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                gap: '8px',
+                                marginBottom: '24px',
+                                paddingTop: '16px'
+                            }}>
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                    disabled={currentPage === 1}
+                                    style={{
+                                        padding: '8px 16px',
+                                        border: '1px solid #dee2e6',
+                                        borderRadius: '6px',
+                                        backgroundColor: currentPage === 1 ? '#f8f9fa' : '#ffffff',
+                                        color: currentPage === 1 ? '#adb5bd' : '#495057',
+                                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                                        fontWeight: '500',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    ← Trước
+                                </button>
+
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '4px',
+                                    alignItems: 'center'
+                                }}>
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                                        // Show first page, last page, current page, and pages around current
+                                        const showPage = page === 1 ||
+                                                        page === totalPages ||
+                                                        (page >= currentPage - 1 && page <= currentPage + 1)
+
+                                        // Show ellipsis
+                                        const showEllipsisBefore = page === currentPage - 2 && currentPage > 3
+                                        const showEllipsisAfter = page === currentPage + 2 && currentPage < totalPages - 2
+
+                                        if (showEllipsisBefore || showEllipsisAfter) {
+                                            return <span key={page} style={{ padding: '0 4px', color: '#adb5bd' }}>...</span>
+                                        }
+
+                                        if (!showPage) return null
+
+                                        return (
+                                            <button
+                                                key={page}
+                                                onClick={() => setCurrentPage(page)}
+                                                style={{
+                                                    padding: '8px 12px',
+                                                    border: '1px solid #dee2e6',
+                                                    borderRadius: '6px',
+                                                    backgroundColor: currentPage === page ? '#F00020' : '#ffffff',
+                                                    color: currentPage === page ? '#ffffff' : '#495057',
+                                                    cursor: 'pointer',
+                                                    fontWeight: currentPage === page ? '600' : '500',
+                                                    minWidth: '40px',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    if (currentPage !== page) {
+                                                        e.currentTarget.style.backgroundColor = '#f8f9fa'
+                                                    }
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    if (currentPage !== page) {
+                                                        e.currentTarget.style.backgroundColor = '#ffffff'
+                                                    }
+                                                }}
+                                            >
+                                                {page}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                    disabled={currentPage === totalPages}
+                                    style={{
+                                        padding: '8px 16px',
+                                        border: '1px solid #dee2e6',
+                                        borderRadius: '6px',
+                                        backgroundColor: currentPage === totalPages ? '#f8f9fa' : '#ffffff',
+                                        color: currentPage === totalPages ? '#adb5bd' : '#495057',
+                                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                                        fontWeight: '500',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    Sau →
+                                </button>
+
+                                <span style={{
+                                    marginLeft: '16px',
+                                    color: '#6c757d',
+                                    fontSize: '14px'
+                                }}>
+                                    Trang {currentPage} / {totalPages} (Tổng {filteredNews.length} tin)
+                                </span>
+                            </div>
+                        )}
 
                         <div className="news-list">
                             {paginatedNews.length > 0 ? (

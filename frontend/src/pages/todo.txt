@@ -16,3 +16,5 @@ hãy gọi lên webhook n8n
 
 ---chỉnh code (bảng comparation, với bank là array)
 ---mỗi khi bấm crawl, nó sẽ bị reload trang
+---phần chọn tin, bỏ nút chọn hủy chọn mới chọn được tin, hãy
+cho tick vào thẳng thẻ tin
