@@ -176,10 +176,27 @@ router.post('/create', async (req, res) => {
           if (!existingLevel2.banks.includes(bankName)) {
             existingLevel2.banks.push(bankName);
           }
+          // Add product info for this bank
+          if (!existingLevel2.products) {
+            existingLevel2.products = {};
+          }
+          if (!existingLevel2.products[bankName]) {
+            existingLevel2.products[bankName] = [];
+          }
+          existingLevel2.products[bankName].push({
+            product_name: product.product_name,
+            _id: product._id
+          });
         } else {
           productsByCategory[level1].push({
             level2,
-            banks: [bankName]
+            banks: [bankName],
+            products: {
+              [bankName]: [{
+                product_name: product.product_name,
+                _id: product._id
+              }]
+            }
           });
         }
       }

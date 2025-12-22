@@ -592,6 +592,7 @@ function SummaryPages({
         const productsByCategory: Record<string, Array<{
             level2: string
             banks: string[]
+            products?: Record<string, Array<{ product_name: string, _id: string }>>
         }>> = {}
 
         selectedProducts.forEach(product => {
@@ -610,10 +611,27 @@ function SummaryPages({
                     if (!existingLevel2.banks.includes(bankName)) {
                         existingLevel2.banks.push(bankName)
                     }
+                    // Add product info for this bank
+                    if (!existingLevel2.products) {
+                        existingLevel2.products = {}
+                    }
+                    if (!existingLevel2.products[bankName]) {
+                        existingLevel2.products[bankName] = []
+                    }
+                    existingLevel2.products[bankName].push({
+                        product_name: product.product_name,
+                        _id: product._id
+                    })
                 } else {
                     productsByCategory[level1].push({
                         level2,
-                        banks: [bankName]
+                        banks: [bankName],
+                        products: {
+                            [bankName]: [{
+                                product_name: product.product_name,
+                                _id: product._id
+                            }]
+                        }
                     })
                 }
             }
@@ -695,21 +713,31 @@ function SummaryPages({
                                             }}>
                                                 {item.level2}
                                             </td>
-                                            {uniqueBanks.map(bank => (
-                                                <td key={bank} style={{
-                                                    padding: windowWidth < 640 ? '8px 4px' : windowWidth < 768 ? '10px 8px' : '12px 16px',
-                                                    textAlign: 'center',
-                                                    borderRight: '1px solid #dee2e6'
-                                                }}>
-                                                    {item.banks.includes(bank) && (
-                                                        <span style={{
-                                                            color: '#28a745',
-                                                            fontSize: windowWidth < 640 ? '16px' : windowWidth < 768 ? '18px' : '20px',
-                                                            fontWeight: 'bold'
-                                                        }}>✓</span>
-                                                    )}
-                                                </td>
-                                            ))}
+                                            {uniqueBanks.map(bank => {
+                                                const hasProduct = item.banks.includes(bank)
+                                                const productNames = hasProduct && item.products?.[bank]
+                                                    ? item.products[bank].map(p => p.product_name).join('\n')
+                                                    : ''
+
+                                                return (
+                                                    <td key={bank} style={{
+                                                        padding: windowWidth < 640 ? '8px 4px' : windowWidth < 768 ? '10px 8px' : '12px 16px',
+                                                        textAlign: 'center',
+                                                        borderRight: '1px solid #dee2e6'
+                                                    }}>
+                                                        {hasProduct && (
+                                                            <span
+                                                                title={productNames}
+                                                                style={{
+                                                                    color: '#28a745',
+                                                                    fontSize: windowWidth < 640 ? '16px' : windowWidth < 768 ? '18px' : '20px',
+                                                                    fontWeight: 'bold',
+                                                                    cursor: 'help'
+                                                                }}>✓</span>
+                                                        )}
+                                                    </td>
+                                                )
+                                            })}
                                         </tr>
                                     ))}
                                 </>
