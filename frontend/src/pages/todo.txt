@@ -18,3 +18,10 @@ hãy gọi lên webhook n8n
 ---mỗi khi bấm crawl, nó sẽ bị reload trang
 ---phần chọn tin, bỏ nút chọn hủy chọn mới chọn được tin, hãy
 cho tick vào thẳng thẻ tin
+
+-----file khởi động
+thêm install playwright và chartjs
+
+----
+phần lưu data local storage của giá vàng và tỷ giá (hãy xóa hết khi
+bắt đầu lần làm báo cáo mới)

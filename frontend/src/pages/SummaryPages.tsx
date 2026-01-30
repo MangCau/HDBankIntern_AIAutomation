@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react'
 import { apiEndpoint } from '../config/api'
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'
+import { Line } from 'react-chartjs-2'
+
+// Register Chart.js components
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
 
 // Interface for NewProductService data
 interface NewProductData {
@@ -97,11 +102,60 @@ function SummaryPages({
     const [editedContent, setEditedContent] = useState<string>('')
     const [crawlingIds, setCrawlingIds] = useState<Set<string>>(new Set()) // Track which items are being crawled
     const [customCrawlUrls, setCustomCrawlUrls] = useState<Record<string, string>>({}) // Custom URLs for manual crawl
-    const [groupImages, setGroupImages] = useState<Record<string, string[]>>({}) // Store multiple images per group (groupId -> array of image URLs)
+    const [groupImages, setGroupImages] = useState<Record<string, string[]>>(() => {
+        try {
+            const saved = localStorage.getItem('summaryPages_groupImages')
+            return saved ? JSON.parse(saved) : {}
+        } catch {
+            return {}
+        }
+    }) // Store multiple images per group (groupId -> array of image URLs)
     const [uploadingGroupImage, setUploadingGroupImage] = useState<string | null>(null) // Track which group is uploading image
-    const [emptyGroupContent, setEmptyGroupContent] = useState<Record<string, string>>({}) // Store content for empty groups (Tỷ giá, Giá vàng)
-    const [emptyGroupSources, setEmptyGroupSources] = useState<Record<string, string>>({}) // Store source URLs for empty groups
+    const [emptyGroupContent, setEmptyGroupContent] = useState<Record<string, string>>(() => {
+        try {
+            const saved = localStorage.getItem('summaryPages_emptyGroupContent')
+            return saved ? JSON.parse(saved) : {}
+        } catch {
+            return {}
+        }
+    }) // Store content for empty groups (Tỷ giá, Giá vàng)
+    const [emptyGroupSources, setEmptyGroupSources] = useState<Record<string, string>>(() => {
+        try {
+            const saved = localStorage.getItem('summaryPages_emptyGroupSources')
+            return saved ? JSON.parse(saved) : {}
+        } catch {
+            return {}
+        }
+    }) // Store source URLs for empty groups
     const [editingEmptyGroup, setEditingEmptyGroup] = useState<string | null>(null) // Track which empty group is being edited
+    const [exchangeRateChartData, setExchangeRateChartData] = useState<{
+        labels: string[]
+        buyRates: number[]
+        sellRates: number[]
+        currency: string
+    } | null>(null) // Store exchange rate chart data
+
+    const [goldPriceChartData, setGoldPriceChartData] = useState<{
+        labels: string[]
+        buyRates: number[]
+        sellRates: number[]
+        goldType: string
+    } | null>(null) // Store gold price chart data
+
+    const [xauUsdPrice, setXauUsdPrice] = useState<{
+        price: string
+        change: string
+        changePercent: string
+        direction: string // 'up' or 'down'
+        timestamp: string // Real-time timestamp from investing.com
+    } | null>(() => {
+        try {
+            const saved = localStorage.getItem('summaryPages_xauUsdPrice')
+            return saved ? JSON.parse(saved) : null
+        } catch {
+            return null
+        }
+    }) // Store XAU/USD price data from investing.com
 
     // State for responsive design
     const [windowWidth, setWindowWidth] = useState(window.innerWidth)
@@ -124,19 +178,6 @@ function SummaryPages({
         localStorage.setItem('summaryPages_currentPage', currentMainPage.toString())
     }, [currentMainPage])
 
-    // Load group images from localStorage on mount
-    useEffect(() => {
-        try {
-            const savedImages = localStorage.getItem('summaryPages_groupImages')
-            if (savedImages) {
-                const parsed = JSON.parse(savedImages)
-                setGroupImages(parsed)
-            }
-        } catch (error) {
-            console.error('Error loading group images from localStorage:', error)
-        }
-    }, [])
-
     // Save group images to localStorage whenever they change
     useEffect(() => {
         try {
@@ -145,24 +186,6 @@ function SummaryPages({
             console.error('Error saving group images to localStorage:', error)
         }
     }, [groupImages])
-
-    // Load empty group content from localStorage on mount
-    useEffect(() => {
-        try {
-            const savedContent = localStorage.getItem('summaryPages_emptyGroupContent')
-            if (savedContent) {
-                const parsed = JSON.parse(savedContent)
-                setEmptyGroupContent(parsed)
-            }
-            const savedSources = localStorage.getItem('summaryPages_emptyGroupSources')
-            if (savedSources) {
-                const parsed = JSON.parse(savedSources)
-                setEmptyGroupSources(parsed)
-            }
-        } catch (error) {
-            console.error('Error loading empty group content from localStorage:', error)
-        }
-    }, [])
 
     // Save empty group content to localStorage whenever it changes
     useEffect(() => {
@@ -182,10 +205,108 @@ function SummaryPages({
         }
     }, [emptyGroupSources])
 
+    // Load exchange rate chart data from localStorage on mount
+    useEffect(() => {
+        try {
+            const savedChartData = localStorage.getItem('summaryPages_exchangeRateChartData')
+            if (savedChartData) {
+                setExchangeRateChartData(JSON.parse(savedChartData))
+            }
+        } catch (error) {
+            console.error('Error loading exchange rate chart data from localStorage:', error)
+        }
+    }, [])
+
+    // Save exchange rate chart data to localStorage whenever it changes
+    useEffect(() => {
+        try {
+            if (exchangeRateChartData) {
+                localStorage.setItem('summaryPages_exchangeRateChartData', JSON.stringify(exchangeRateChartData))
+            }
+        } catch (error) {
+            console.error('Error saving exchange rate chart data to localStorage:', error)
+        }
+    }, [exchangeRateChartData])
+
+    // Load gold price chart data from localStorage on mount
+    useEffect(() => {
+        try {
+            const savedChartData = localStorage.getItem('summaryPages_goldPriceChartData')
+            if (savedChartData) {
+                setGoldPriceChartData(JSON.parse(savedChartData))
+            }
+        } catch (error) {
+            console.error('Error loading gold price chart data from localStorage:', error)
+        }
+    }, [])
+
+    // Save gold price chart data to localStorage whenever it changes
+    useEffect(() => {
+        try {
+            if (goldPriceChartData) {
+                localStorage.setItem('summaryPages_goldPriceChartData', JSON.stringify(goldPriceChartData))
+            }
+        } catch (error) {
+            console.error('Error saving gold price chart data to localStorage:', error)
+        }
+    }, [goldPriceChartData])
+
+    // Save XAU/USD price data to localStorage whenever it changes
+    useEffect(() => {
+        try {
+            if (xauUsdPrice) {
+                localStorage.setItem('summaryPages_xauUsdPrice', JSON.stringify(xauUsdPrice))
+            }
+        } catch (error) {
+            console.error('Error saving XAU/USD price data to localStorage:', error)
+        }
+    }, [xauUsdPrice])
+
     // Filter selected items
     const selectedProducts = newProducts.filter(product => product.selected)
     const selectedBankingTrends = bankingTrends.filter(trend => trend.selected)
     const selectedFintechNews = fintechNews.filter(news => news.selected)
+
+    // Helper function to render text with clickable links
+    const renderTextWithLinks = (text: string) => {
+        if (!text) return null
+
+        // Split text by lines
+        const lines = text.split('\n')
+
+        return lines.map((line, lineIndex) => {
+            // Check if line contains a URL pattern
+            const urlPattern = /(https?:\/\/[^\s]+)/g
+            const parts = line.split(urlPattern)
+
+            return (
+                <span key={lineIndex}>
+                    {parts.map((part, partIndex) => {
+                        // Check if this part is a URL
+                        if (part.match(urlPattern)) {
+                            return (
+                                <a
+                                    key={partIndex}
+                                    href={part}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        color: '#007bff',
+                                        textDecoration: 'underline',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    {part}
+                                </a>
+                            )
+                        }
+                        return <span key={partIndex}>{part}</span>
+                    })}
+                    {lineIndex < lines.length - 1 && <br />}
+                </span>
+            )
+        })
+    }
 
     // Handle update detail content for products
     const handleUpdateDetailContent = async (productId: string) => {
@@ -359,7 +480,241 @@ function SummaryPages({
         }
     }
 
-    // Handle temporary crawl for empty groups (Tỷ giá, Giá vàng)
+    // Handle fetching exchange rate chart for "Tỷ giá"
+    const handleFetchExchangeRate = async () => {
+        const groupName = "Tỷ giá"
+        const groupKey = `${groupName}_empty`
+        setCrawlingIds(prev => new Set(prev).add(groupKey))
+
+        try {
+            // Execute all 3 requests in parallel
+            const [chartResponse, tableResponse, vovResponse] = await Promise.all([
+                // 1. Original: Get chart from 24h.com.vn
+                fetch(apiEndpoint(`api/data/crawl-exchange-rate`), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }),
+                // 2. New: Scrape table from tygiausd.org
+                fetch(apiEndpoint(`api/data/scrape-tygiausd-table`), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }),
+                // 3. New: Extract VOV article with Gemini
+                fetch(apiEndpoint(`api/data/extract-vov-exchange-rate`), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        date: new Date().toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' })
+                    })
+                })
+            ])
+
+            const chartResult = await chartResponse.json()
+            const tableResult = await tableResponse.json()
+            const vovResult = await vovResponse.json()
+
+            // Process chart data (original logic)
+            if (chartResult.success) {
+                // Store the chart data for rendering
+                if (chartResult.data.chartData) {
+                    setExchangeRateChartData(chartResult.data.chartData)
+                }
+
+                // Store the screenshot in gallery images for "Thêm ảnh" section
+                if (chartResult.data.screenshot) {
+                    const imageKey = `page3-${groupName}` // Use page3 prefix for Page 3
+                    setGroupImages(prev => {
+                        const existing = prev[imageKey] || []
+                        // Add screenshot if not already exists
+                        if (!existing.includes(chartResult.data.screenshot)) {
+                            return {
+                                ...prev,
+                                [imageKey]: [...existing, chartResult.data.screenshot]
+                            }
+                        }
+                        return prev
+                    })
+                }
+
+                // Store the source URL
+                setEmptyGroupSources(prev => ({
+                    ...prev,
+                    [groupName]: chartResult.data.source
+                }))
+            }
+
+            // Build text content from table and VOV article
+            let textContent = ''
+
+            // Add table data
+            if (tableResult.success && tableResult.data.formattedText) {
+                textContent += tableResult.data.formattedText + '\n\n'
+            }
+
+            // Add VOV article content
+            if (vovResult.success && vovResult.data.content) {
+                textContent += '📰 Bài viết từ VOV:\n\n' + vovResult.data.content
+            }
+
+            // Step 4: Call Gemini to summarize all data
+            if (chartResult.success && tableResult.success && vovResult.success) {
+                try {
+                    // Prepare data for summary
+                    const firstTableRow = tableResult.data.rows && tableResult.data.rows.length > 0 ? tableResult.data.rows[0] : null
+
+                    if (firstTableRow && chartResult.data.chartData) {
+                        const summaryResponse = await fetch(apiEndpoint(`api/data/summarize-exchange-rate`), {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                centralRateText: vovResult.data.content,
+                                chartData: chartResult.data.chartData,
+                                freeMarketData: {
+                                    buyPrice: firstTableRow.buy.price,
+                                    buyChange: firstTableRow.buy.change,
+                                    sellPrice: firstTableRow.sell.price,
+                                    sellChange: firstTableRow.sell.change
+                                }
+                            })
+                        })
+
+                        const summaryResult = await summaryResponse.json()
+
+                        if (summaryResult.success && summaryResult.data.summary) {
+                            textContent += '\n\n📝 Nhận xét:\n\n' + summaryResult.data.summary
+                        }
+                    }
+                } catch (summaryError) {
+                    console.error('Error generating summary:', summaryError)
+                    // Continue without summary
+                }
+            }
+
+            // Store the combined text content
+            if (textContent) {
+                setEmptyGroupContent(prev => ({
+                    ...prev,
+                    [groupName]: textContent.trim()
+                }))
+            }
+
+            alert('Đã lấy tỷ giá USD thành công!')
+        } catch (error) {
+            console.error('Error fetching exchange rate:', error)
+            alert('Có lỗi xảy ra khi lấy tỷ giá')
+        } finally {
+            setCrawlingIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(groupKey)
+                return newSet
+            })
+        }
+    }
+
+    // Handle fetching gold price chart for "Giá vàng"
+    const handleFetchGoldPrice = async () => {
+        const groupName = "Giá vàng"
+        const groupKey = `${groupName}_empty`
+        setCrawlingIds(prev => new Set(prev).add(groupKey))
+
+        try {
+            const response = await fetch(apiEndpoint(`api/data/crawl-gold-price`), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const result = await response.json()
+
+            if (result.success) {
+                // Store the chart data for rendering
+                if (result.data.chartData) {
+                    setGoldPriceChartData(result.data.chartData)
+                }
+
+                // Store XAU/USD price data
+                if (result.data.xauUsdPrice) {
+                    setXauUsdPrice(result.data.xauUsdPrice)
+                }
+
+                // Store the screenshot in gallery images for "Thêm ảnh" section
+                if (result.data.screenshot) {
+                    const imageKey = `page3-${groupName}` // Use page3 prefix for Page 3
+                    setGroupImages(prev => {
+                        const existing = prev[imageKey] || []
+                        // Add screenshot if not already exists
+                        if (!existing.includes(result.data.screenshot)) {
+                            return {
+                                ...prev,
+                                [imageKey]: [...existing, result.data.screenshot]
+                            }
+                        }
+                        return prev
+                    })
+                }
+
+                // Store the source URL
+                setEmptyGroupSources(prev => ({
+                    ...prev,
+                    [groupName]: result.data.source
+                }))
+
+                // Call AI to summarize gold price data
+                if (result.data.xauUsdPrice && result.data.chartData) {
+                    try {
+                        console.log('🤖 Calling AI to summarize gold price data...')
+                        const summaryResponse = await fetch(apiEndpoint(`api/data/summarize-gold-price`), {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                xauUsdData: result.data.xauUsdPrice,
+                                chartData: result.data.chartData
+                            })
+                        })
+
+                        const summaryResult = await summaryResponse.json()
+                        if (summaryResult.success && summaryResult.data.summary) {
+                            setEmptyGroupContent(prev => ({
+                                ...prev,
+                                [groupName]: summaryResult.data.summary
+                            }))
+                            console.log('✅ AI summary for gold price generated successfully')
+                        } else {
+                            console.warn('⚠️ AI summary failed:', summaryResult.message)
+                        }
+                    } catch (summaryError) {
+                        console.error('⚠️ Error generating AI summary for gold price (non-critical):', summaryError)
+                    }
+                }
+
+                alert('Đã lấy giá vàng thành công!')
+            } else {
+                alert('Lỗi lấy giá vàng: ' + result.message)
+            }
+        } catch (error) {
+            console.error('Error fetching gold price:', error)
+            alert('Có lỗi xảy ra khi lấy giá vàng')
+        } finally {
+            setCrawlingIds(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(groupKey)
+                return newSet
+            })
+        }
+    }
+
+    // Handle temporary crawl for empty groups (Giá vàng and others)
     const handleTemporaryCrawl = async (groupName: string) => {
         const customUrl = customCrawlUrls[`${groupName}_empty`]
 
@@ -1441,14 +1796,14 @@ function SummaryPages({
                                     </div>
                                 ))
                                 ) : (
-                                    // Empty state for Tỷ giá and Giá vàng - show input and crawl button only
+                                    // Empty state for Tỷ giá and Giá vàng
                                     <div style={{
                                         padding: '16px',
                                         border: '1px solid #e9ecef',
                                         borderRadius: '6px',
                                         backgroundColor: '#fafbfc'
                                     }}>
-                                        {/* Crawl URL input and buttons */}
+                                        {/* Action buttons */}
                                         <div style={{
                                             marginBottom: '16px',
                                             padding: '12px',
@@ -1456,46 +1811,89 @@ function SummaryPages({
                                             borderRadius: '6px',
                                             border: '1px solid #dee2e6'
                                         }}>
-                                            <div style={{
-                                                display: 'flex',
-                                                flexDirection: windowWidth < 640 ? 'column' : 'row',
-                                                gap: '8px',
-                                                alignItems: windowWidth < 640 ? 'stretch' : 'center'
-                                            }}>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nhập URL để crawl (http:// hoặc https://)"
-                                                    value={customCrawlUrls[`${topicGroup}_empty`] || ''}
-                                                    onChange={(e) => setCustomCrawlUrls({ ...customCrawlUrls, [`${topicGroup}_empty`]: e.target.value })}
-                                                    style={{
-                                                        flex: 1,
-                                                        padding: '8px 12px',
-                                                        border: '1px solid #ced4da',
-                                                        borderRadius: '4px',
-                                                        fontSize: '13px',
-                                                        minWidth: windowWidth < 640 ? 'auto' : '200px'
-                                                    }}
-                                                />
+                                            {topicGroup === "Tỷ giá" ? (
+                                                // Special button for Tỷ giá
                                                 <button
-                                                    onClick={() => handleTemporaryCrawl(topicGroup)}
+                                                    onClick={handleFetchExchangeRate}
                                                     disabled={crawlingIds.has(`${topicGroup}_empty`)}
                                                     style={{
-                                                        padding: '8px 16px',
-                                                        backgroundColor: crawlingIds.has(`${topicGroup}_empty`) ? '#6c757d' : '#007bff',
+                                                        padding: '10px 20px',
+                                                        backgroundColor: crawlingIds.has(`${topicGroup}_empty`) ? '#6c757d' : '#28a745',
                                                         color: '#ffffff',
                                                         border: 'none',
                                                         borderRadius: '4px',
-                                                        fontSize: '13px',
+                                                        fontSize: '14px',
                                                         fontWeight: '600',
                                                         cursor: crawlingIds.has(`${topicGroup}_empty`) ? 'not-allowed' : 'pointer',
-                                                        whiteSpace: 'nowrap',
-                                                        flex: windowWidth < 640 ? 1 : 'initial',
-                                                        opacity: crawlingIds.has(`${topicGroup}_empty`) ? 0.7 : 1
+                                                        opacity: crawlingIds.has(`${topicGroup}_empty`) ? 0.7 : 1,
+                                                        width: '100%'
                                                     }}
                                                 >
-                                                    {crawlingIds.has(`${topicGroup}_empty`) ? 'Đang crawl...' : 'Crawl'}
+                                                    {crawlingIds.has(`${topicGroup}_empty`) ? 'Đang lấy dữ liệu...' : '📊 Lấy tỷ giá'}
                                                 </button>
-                                            </div>
+                                            ) : topicGroup === "Giá vàng" ? (
+                                                // Special button for Giá vàng
+                                                <button
+                                                    onClick={handleFetchGoldPrice}
+                                                    disabled={crawlingIds.has(`${topicGroup}_empty`)}
+                                                    style={{
+                                                        padding: '10px 20px',
+                                                        backgroundColor: crawlingIds.has(`${topicGroup}_empty`) ? '#6c757d' : '#ffc107',
+                                                        color: '#000000',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        fontSize: '14px',
+                                                        fontWeight: '600',
+                                                        cursor: crawlingIds.has(`${topicGroup}_empty`) ? 'not-allowed' : 'pointer',
+                                                        opacity: crawlingIds.has(`${topicGroup}_empty`) ? 0.7 : 1,
+                                                        width: '100%'
+                                                    }}
+                                                >
+                                                    {crawlingIds.has(`${topicGroup}_empty`) ? 'Đang lấy dữ liệu...' : '💰 Lấy giá vàng'}
+                                                </button>
+                                            ) : (
+                                                // Original input + Crawl button for other groups
+                                                <div style={{
+                                                    display: 'flex',
+                                                    flexDirection: windowWidth < 640 ? 'column' : 'row',
+                                                    gap: '8px',
+                                                    alignItems: windowWidth < 640 ? 'stretch' : 'center'
+                                                }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Nhập URL để crawl (http:// hoặc https://)"
+                                                        value={customCrawlUrls[`${topicGroup}_empty`] || ''}
+                                                        onChange={(e) => setCustomCrawlUrls({ ...customCrawlUrls, [`${topicGroup}_empty`]: e.target.value })}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '8px 12px',
+                                                            border: '1px solid #ced4da',
+                                                            borderRadius: '4px',
+                                                            fontSize: '13px',
+                                                            minWidth: windowWidth < 640 ? 'auto' : '200px'
+                                                        }}
+                                                    />
+                                                    <button
+                                                        onClick={() => handleTemporaryCrawl(topicGroup)}
+                                                        disabled={crawlingIds.has(`${topicGroup}_empty`)}
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            backgroundColor: crawlingIds.has(`${topicGroup}_empty`) ? '#6c757d' : '#007bff',
+                                                            color: '#ffffff',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            fontSize: '13px',
+                                                            fontWeight: '600',
+                                                            cursor: crawlingIds.has(`${topicGroup}_empty`) ? 'not-allowed' : 'pointer',
+                                                            whiteSpace: 'nowrap',
+                                                            flex: windowWidth < 640 ? 1 : 'initial',
+                                                            opacity: crawlingIds.has(`${topicGroup}_empty`) ? 0.7 : 1
+                                                        }}
+                                                    >
+                                                        {crawlingIds.has(`${topicGroup}_empty`) ? 'Đang crawl...' : 'Crawl'}
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Content display area (empty state) */}
@@ -1565,26 +1963,275 @@ function SummaryPages({
                                             ) : (
                                                 // Display mode
                                                 <div>
-                                                    <div style={{
-                                                        marginBottom: '8px',
-                                                        whiteSpace: 'pre-wrap',
-                                                        wordBreak: 'break-word',
-                                                        overflowWrap: 'anywhere',
-                                                        maxHeight: '400px',
-                                                        overflowY: 'auto',
-                                                        overflowX: 'auto',
-                                                        padding: '8px',
-                                                        backgroundColor: '#f8f9fa',
-                                                        borderRadius: '4px',
-                                                        border: '1px solid #dee2e6',
-                                                        width: '100%',
-                                                        boxSizing: 'border-box',
-                                                        color: emptyGroupContent[topicGroup] ? '#495057' : '#adb5bd',
-                                                        textAlign: emptyGroupContent[topicGroup] ? 'left' : 'center',
-                                                        fontStyle: emptyGroupContent[topicGroup] ? 'normal' : 'italic'
-                                                    }}>
-                                                        {emptyGroupContent[topicGroup] || 'Chưa có nội dung. Vui lòng nhập URL và nhấn Crawl hoặc nhập thủ công.'}
-                                                    </div>
+                                                    {topicGroup === "Tỷ giá" ? (
+                                                        // Two-column layout for Tỷ giá: text left, chart right
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            gap: '16px',
+                                                            marginBottom: '8px',
+                                                            flexDirection: windowWidth < 768 ? 'column' : 'row'
+                                                        }}>
+                                                            {/* Left: Text content */}
+                                                            <div style={{
+                                                                flex: 1,
+                                                                whiteSpace: 'pre-wrap',
+                                                                wordBreak: 'break-word',
+                                                                overflowWrap: 'anywhere',
+                                                                maxHeight: '400px',
+                                                                overflowY: 'auto',
+                                                                padding: '12px',
+                                                                backgroundColor: '#f8f9fa',
+                                                                borderRadius: '4px',
+                                                                border: '1px solid #dee2e6',
+                                                                color: emptyGroupContent[topicGroup] ? '#495057' : '#adb5bd',
+                                                                textAlign: emptyGroupContent[topicGroup] ? 'left' : 'center',
+                                                                fontStyle: emptyGroupContent[topicGroup] ? 'normal' : 'italic'
+                                                            }}>
+                                                                {emptyGroupContent[topicGroup] ? renderTextWithLinks(emptyGroupContent[topicGroup]) : 'Nhấn nút "Chỉnh sửa" để nhập nội dung phân tích tỷ giá.'}
+                                                            </div>
+
+                                                            {/* Right: Interactive Chart */}
+                                                            <div style={{
+                                                                flex: 1,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                backgroundColor: '#ffffff',
+                                                                borderRadius: '4px',
+                                                                border: '1px solid #dee2e6',
+                                                                minHeight: '250px',
+                                                                padding: '12px'
+                                                            }}>
+                                                                {exchangeRateChartData && exchangeRateChartData.labels.length > 0 ? (
+                                                                    <div style={{ width: '100%', height: '500px' }}>
+                                                                        <Line
+                                                                            data={{
+                                                                                labels: exchangeRateChartData.labels,
+                                                                                datasets: [
+                                                                                    {
+                                                                                        label: 'Mua vào',
+                                                                                        data: exchangeRateChartData.buyRates,
+                                                                                        borderColor: 'rgb(220, 53, 69)',
+                                                                                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                                                                        tension: 0.4
+                                                                                    },
+                                                                                    {
+                                                                                        label: 'Bán ra',
+                                                                                        data: exchangeRateChartData.sellRates,
+                                                                                        borderColor: 'rgb(40, 167, 69)',
+                                                                                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                                                                        tension: 0.4
+                                                                                    }
+                                                                                ]
+                                                                            }}
+                                                                            options={{
+                                                                                responsive: true,
+                                                                                maintainAspectRatio: false,
+                                                                                plugins: {
+                                                                                    legend: {
+                                                                                        position: 'top' as const,
+                                                                                    },
+                                                                                    title: {
+                                                                                        display: true,
+                                                                                        text: `Biểu đồ tỷ giá ${exchangeRateChartData.currency}`
+                                                                                    },
+                                                                                    tooltip: {
+                                                                                        mode: 'index' as const,
+                                                                                        intersect: false
+                                                                                    }
+                                                                                },
+                                                                                scales: {
+                                                                                    y: {
+                                                                                        beginAtZero: false
+                                                                                    }
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div style={{
+                                                                        color: '#adb5bd',
+                                                                        fontStyle: 'italic',
+                                                                        textAlign: 'center'
+                                                                    }}>
+                                                                        Nhấn "Lấy tỷ giá" để hiển thị biểu đồ
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : topicGroup === "Giá vàng" ? (
+                                                        // Two-column layout for Giá vàng: text left, chart right
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            gap: '16px',
+                                                            marginBottom: '8px',
+                                                            flexDirection: windowWidth < 768 ? 'column' : 'row'
+                                                        }}>
+                                                            {/* Left: Text content */}
+                                                            <div style={{
+                                                                flex: 1,
+                                                                whiteSpace: 'pre-wrap',
+                                                                wordBreak: 'break-word',
+                                                                overflowWrap: 'anywhere',
+                                                                maxHeight: '400px',
+                                                                overflowY: 'auto',
+                                                                padding: '12px',
+                                                                backgroundColor: '#f8f9fa',
+                                                                borderRadius: '4px',
+                                                                border: '1px solid #dee2e6',
+                                                                color: emptyGroupContent[topicGroup] ? '#495057' : '#adb5bd',
+                                                                textAlign: emptyGroupContent[topicGroup] ? 'left' : 'center',
+                                                                fontStyle: emptyGroupContent[topicGroup] ? 'normal' : 'italic'
+                                                            }}>
+                                                                {/* XAU/USD Price Display */}
+                                                                {xauUsdPrice && (
+                                                                    <div style={{
+                                                                        marginBottom: emptyGroupContent[topicGroup] ? '12px' : '0',
+                                                                        padding: '10px 14px',
+                                                                        backgroundColor: '#ffffff',
+                                                                        borderRadius: '6px',
+                                                                        border: `1px solid ${xauUsdPrice.direction === 'down' ? '#f5c6cb' : '#c3e6cb'}`,
+                                                                        fontStyle: 'normal',
+                                                                        textAlign: 'left',
+                                                                        color: '#495057'
+                                                                    }}>
+                                                                        <div style={{
+                                                                            fontSize: '12px',
+                                                                            color: '#6c757d',
+                                                                            marginBottom: '4px',
+                                                                            fontWeight: 500
+                                                                        }}>
+                                                                            XAU/USD (Investing.com)
+                                                                        </div>
+                                                                        <div style={{
+                                                                            display: 'flex',
+                                                                            alignItems: 'baseline',
+                                                                            gap: '10px',
+                                                                            flexWrap: 'wrap'
+                                                                        }}>
+                                                                            <span style={{
+                                                                                fontSize: '22px',
+                                                                                fontWeight: 700,
+                                                                                color: '#212529'
+                                                                            }}>
+                                                                                {xauUsdPrice.price}
+                                                                            </span>
+                                                                            <span style={{
+                                                                                fontSize: '14px',
+                                                                                fontWeight: 600,
+                                                                                color: xauUsdPrice.direction === 'down' ? '#dc3545' : '#28a745'
+                                                                            }}>
+                                                                                {xauUsdPrice.direction === 'down' ? '▼' : '▲'}{' '}
+                                                                                {xauUsdPrice.change}{' '}
+                                                                                ({xauUsdPrice.changePercent})
+                                                                            </span>
+                                                                        </div>
+                                                                        {xauUsdPrice.timestamp && (
+                                                                            <div style={{
+                                                                                fontSize: '11px',
+                                                                                color: '#868e96',
+                                                                                marginTop: '4px'
+                                                                            }}>
+                                                                                {xauUsdPrice.timestamp}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                                {emptyGroupContent[topicGroup] || (!xauUsdPrice ? 'Nhấn nút "Chỉnh sửa" để nhập nội dung phân tích giá vàng.' : '')}
+                                                            </div>
+
+                                                            {/* Right: Interactive Chart */}
+                                                            <div style={{
+                                                                flex: 1,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                backgroundColor: '#ffffff',
+                                                                borderRadius: '4px',
+                                                                border: '1px solid #dee2e6',
+                                                                minHeight: '250px',
+                                                                padding: '12px'
+                                                            }}>
+                                                                {goldPriceChartData && goldPriceChartData.labels.length > 0 ? (
+                                                                    <div style={{ width: '100%', height: '500px' }}>
+                                                                        <Line
+                                                                            data={{
+                                                                                labels: goldPriceChartData.labels,
+                                                                                datasets: [
+                                                                                    {
+                                                                                        label: 'Mua vào',
+                                                                                        data: goldPriceChartData.buyRates,
+                                                                                        borderColor: 'rgb(255, 193, 7)',
+                                                                                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                                                                                        tension: 0.4
+                                                                                    },
+                                                                                    {
+                                                                                        label: 'Bán ra',
+                                                                                        data: goldPriceChartData.sellRates,
+                                                                                        borderColor: 'rgb(255, 152, 0)',
+                                                                                        backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                                                                                        tension: 0.4
+                                                                                    }
+                                                                                ]
+                                                                            }}
+                                                                            options={{
+                                                                                responsive: true,
+                                                                                maintainAspectRatio: false,
+                                                                                plugins: {
+                                                                                    legend: {
+                                                                                        position: 'top' as const,
+                                                                                    },
+                                                                                    title: {
+                                                                                        display: true,
+                                                                                        text: `Biểu đồ giá vàng ${goldPriceChartData.goldType}`
+                                                                                    },
+                                                                                    tooltip: {
+                                                                                        mode: 'index' as const,
+                                                                                        intersect: false
+                                                                                    }
+                                                                                },
+                                                                                scales: {
+                                                                                    y: {
+                                                                                        beginAtZero: false
+                                                                                    }
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div style={{
+                                                                        color: '#adb5bd',
+                                                                        fontStyle: 'italic',
+                                                                        textAlign: 'center'
+                                                                    }}>
+                                                                        Nhấn "Lấy giá vàng" để hiển thị biểu đồ
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        // Original single-column layout for other groups
+                                                        <div style={{
+                                                            marginBottom: '8px',
+                                                            whiteSpace: 'pre-wrap',
+                                                            wordBreak: 'break-word',
+                                                            overflowWrap: 'anywhere',
+                                                            maxHeight: '400px',
+                                                            overflowY: 'auto',
+                                                            overflowX: 'auto',
+                                                            padding: '8px',
+                                                            backgroundColor: '#f8f9fa',
+                                                            borderRadius: '4px',
+                                                            border: '1px solid #dee2e6',
+                                                            width: '100%',
+                                                            boxSizing: 'border-box',
+                                                            color: emptyGroupContent[topicGroup] ? '#495057' : '#adb5bd',
+                                                            textAlign: emptyGroupContent[topicGroup] ? 'left' : 'center',
+                                                            fontStyle: emptyGroupContent[topicGroup] ? 'normal' : 'italic'
+                                                        }}>
+                                                            {emptyGroupContent[topicGroup] || 'Chưa có nội dung. Vui lòng nhập URL và nhấn Crawl hoặc nhập thủ công.'}
+                                                        </div>
+                                                    )}
                                                     {/* Display source URL if available */}
                                                     {emptyGroupSources[topicGroup] && (
                                                         <div style={{
@@ -2230,10 +2877,17 @@ function SummaryPages({
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                 <button
                     onClick={() => {
-                        // Clear group images and empty group content from localStorage when resetting
+                        // Clear all cached data from localStorage when resetting
                         localStorage.removeItem('summaryPages_groupImages')
                         localStorage.removeItem('summaryPages_emptyGroupContent')
                         localStorage.removeItem('summaryPages_emptyGroupSources')
+                        localStorage.removeItem('summaryPages_exchangeRateChartData')
+                        localStorage.removeItem('summaryPages_goldPriceChartData')
+                        localStorage.removeItem('summaryPages_xauUsdPrice')
+                        // Reset state
+                        setExchangeRateChartData(null)
+                        setGoldPriceChartData(null)
+                        setXauUsdPrice(null)
                         onResetWithCleanup()
                     }}
                     style={{
@@ -2306,10 +2960,17 @@ function SummaryPages({
 
                             if (result.success) {
                                 alert(`Báo cáo đã được tạo thành công!\nTổng số tin: ${result.report.totalItems}\nKhoảng thời gian: ${result.report.dateRange}`)
-                                // Clear group images and empty group content from localStorage when report is confirmed
+                                // Clear all cached data from localStorage when report is confirmed
                                 localStorage.removeItem('summaryPages_groupImages')
                                 localStorage.removeItem('summaryPages_emptyGroupContent')
                                 localStorage.removeItem('summaryPages_emptyGroupSources')
+                                localStorage.removeItem('summaryPages_exchangeRateChartData')
+                                localStorage.removeItem('summaryPages_goldPriceChartData')
+                                localStorage.removeItem('summaryPages_xauUsdPrice')
+                                // Reset state
+                                setExchangeRateChartData(null)
+                                setGoldPriceChartData(null)
+                                setXauUsdPrice(null)
                                 onReportConfirmed()
                             } else {
                                 alert('Có lỗi xảy ra khi tạo báo cáo: ' + (result.error || 'Unknown error'))

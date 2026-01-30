@@ -101,7 +101,7 @@ async function executeWorkflow(jobId, startDate, endDate) {
     logger.info('Callback URL:', { callbackUrl });
 
     const response = await axios.post(
-      'https://hdbankautoreport.app.n8n.cloud/webhook/4291406d-c1d0-4663-80f3-7f6b4f8fc188',
+      'http://localhost:5678/webhook/4291406d-c1d0-4663-80f3-7f6b4f8fc188',
       {
         startDate,
         endDate,
@@ -164,7 +164,7 @@ router.post('/reprocess-item/:collection/:id', async (req, res) => {
     }
 
     // Get n8n webhook URL from environment
-    const n8nWebhookUrl = 'https://hdbankautoreport.app.n8n.cloud/webhook/4291406d-c1d0-4663-80f3-7f6b4f8fc190';
+    const n8nWebhookUrl = 'http://localhost:5678/webhook/4291406d-c1d0-4663-80f3-7f6b4f8fc190';
 
     // Use id_processed if available, otherwise use _id
     const idToSend = item.id_processed || id;
@@ -330,7 +330,7 @@ async function executeReprocess(jobId, id_processed, collection, itemId) {
 
     logger.info('Reprocess callback URL:', { callbackUrl });
 
-    const n8nWebhookUrl = 'https://hdbankautoreport.app.n8n.cloud/webhook/4291406d-c1d0-4663-80f3-7f6b4f8fc190';
+    const n8nWebhookUrl = 'http://localhost:5678/webhook/4291406d-c1d0-4663-80f3-7f6b4f8fc190';
 
     await axios.post(n8nWebhookUrl, {
       id_processed,

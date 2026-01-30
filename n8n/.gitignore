@@ -1,5 +1,0 @@
-.env
-data/
-*.log
-credentials/
-.n8n/
